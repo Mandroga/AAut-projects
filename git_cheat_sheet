@@ -1,0 +1,52 @@
+
+Setup --------------------
+
+git config --global user.name "Your Name"   # Set your name for commits
+git config --global user.email "you@email"  # Set your email for commits
+
+Repository basics --------
+
+git init                # Create a new local repository
+git clone <url>         # Clone (download) a remote repo
+git status              # Show changes in working directory
+git log                 # View commit history
+
+Staging and committing ------
+
+git add <file>          # Stage a specific file
+git add .               # Stage all changes
+git commit -m "msg"     # Commit staged changes with a message
+
+Branching --------------------
+
+git branch              # List branches
+git branch <name>       # Create a new branch
+git checkout <name>     # Switch to branch
+git checkout -b <name>  # Create and switch to a new branch
+git merge <branch>      # Merge branch into current one
+
+Remotes (Connected Repositories) --
+
+git remote -v           # Show remotes (where repo is connected)
+git remote add origin <url>  # Link local repo to remote
+git remote remove origin     # Remove remote
+
+Push and Pull ----------------------
+
+git push origin <branch>     # Push branch to remote repo
+git pull origin <branch>     # Fetch + merge changes from remote
+git fetch                    # Fetch changes without merging
+
+Undo and fix ------------------------
+
+git restore <file>           # Undo changes in working directory
+git reset HEAD <file>        # Unstage a file
+git reset --hard HEAD        # Reset repo to last commit (⚠️ erases changes)
+git revert <commit>          # Create a new commit that undoes a commit
+
+Inspect ------------------------------
+
+git diff               # Show unstaged changes
+git diff --staged      # Show staged changes
+git show <commit>      # Show details of a commit
+
