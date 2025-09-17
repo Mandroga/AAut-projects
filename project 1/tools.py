@@ -551,6 +551,17 @@ def min_multiple_plot(N_plots, plot_functions, check_box=False):
             plot_functions(subplot, n)
             plots += [subplot]
 
+    
+    def on_click(event):
+        axes_flatten = list(axes.flatten())
+        ax_index = axes_flatten.index(event.inaxes)
+        fig2, ax2 = plt.subplots()
+        plot_functions(ax2, ax_index)
+        plt.show()
+
+
+    fig.canvas.mpl_connect('button_press_event', on_click)
+
     if check_box:
         line_by_label = {}
         for subplot in plots:
@@ -574,6 +585,7 @@ def min_multiple_plot(N_plots, plot_functions, check_box=False):
 
             check.on_clicked(toggle_visibility)
         plt.show()
+    return fig, axes
 
 def bar_plot(df_, y, X=None, label=None, min_multiples=None ,cmap_name='viridis'):
     df = df_.copy()
@@ -681,8 +693,10 @@ def bar_plot(df_, y, X=None, label=None, min_multiples=None ,cmap_name='viridis'
             height=heights,
             width=bar_width,
             color=bar_colors,
-            labels=label_unique
+           # labels=label_unique
         )
+        handles = [mpatches.Patch(color=color_map[lbl], label=lbl) for lbl in label_unique]
+        subplot.legend(handles=handles, loc='lower left', bbox_to_anchor=(0.01, 0.01), fontsize='small')
 
         # Create one legend entry per unique label
         # handles = [mpatches.Patch(color=color_map[lbl], label=lbl) for lbl in label_unique]
@@ -764,8 +778,9 @@ def bar_plot(df_, y, X=None, label=None, min_multiples=None ,cmap_name='viridis'
             plot_f = plot_f_lmm
             N = len(min_multiples_unique)
 
-    min_multiple_plot(N, plot_f)
-    #plt.show()
+    fig, axes = min_multiple_plot(N, plot_f)
+
+    return fig, axes
 
 def plot_colors(n_groups, n_elements=1, cmap_name='viridis'):
     cmap = plt.colormaps.get_cmap(cmap_name)
@@ -847,7 +862,41 @@ def plot_model_performance(model_fit_data, metrics):
     plt.tight_layout()
     plt.show()
 
-def pairs(df, target=None, hue=None):
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+
+def pairs(df, target=None):
+    """
+    R-style pairs plot with histograms, scatterplots, correlations,
+    optional coloring (target).
+    """
+
+    # correlation annotation function
+    def corrfunc(x, y, **kws):
+        r = np.corrcoef(x, y)[0, 1]
+        ax = plt.gca()
+        ax.annotate(f"r = {r:.2f}", xy=(0.5, 0.5), xycoords=ax.transAxes,
+                    ha='center', va='center', fontsize=12)
+
+    # if target is given, treat it as hue
+    hue = target if target in df.columns else None
+
+    g = sns.PairGrid(df, hue=hue)
+
+    # lower triangle → scatterplots
+    g.map_lower(sns.scatterplot)
+
+    # diagonal → histograms
+    g.map_diag(sns.histplot)
+
+    # upper triangle → correlations
+    g.map_upper(corrfunc)
+
+    if hue is not None:
+        g.add_legend()
+
+    plt.show()
     """
     R-style pairs plot with histograms, scatterplots, correlations,
     optional coloring (hue), and optional point labels (target).
