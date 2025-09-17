@@ -1,5 +1,5 @@
 #imports
-# %%
+
 import pandas as pd
 import plotly.graph_objects as go
 import seaborn as sns
@@ -16,42 +16,51 @@ from sklearn.model_selection import cross_validate
 from scipy.stats import chi2
 from catboost import CatBoostClassifier, CatBoostRegressor
 
-def interactive_histogram_plotly(df, x_label='X', y_label='Counts', title='', x_range=None, y_range=None):
+def interactive_histogram_plotly(df, x_label='X', y_label='Counts', title='', x_range=None, nbins=None, y_max=0):
     """
     Plota histogramas interativos com checkboxes dentro do gráfico.
-    
-    Parâmetros:
-        df : pd.DataFrame
-            DataFrame com colunas numéricas.
-        x_range : list ou tuple, opcional
-            Limites fixos do eixo X, ex: [0, 10]. Se None, ajusta automaticamente.
-        y_range : list ou tuple, opcional
-            Limites fixos do eixo Y, ex: [0, 5]. Se None, ajusta automaticamente.
     """
-    
-    # Determinar limites automáticos se não fornecidos
+
+    # Limites automáticos do eixo X
     if x_range is None:
         x_min = df.min().min()
         x_max = df.max().max()
         x_range = [x_min, x_max]
-    
-    if y_range is None:
-        # Aproximação do máximo de contagem em todos os histogramas
-        y_max = max(df[col].value_counts().max() for col in df.columns)
-        y_range = [0, y_max + 1]  # adiciona 1 para não cortar a barra
-    
+    else:
+        x_min, x_max = x_range
+
+    # Define nbins se não fornecido
+    if nbins is None:
+        nbins = int(x_max - x_min) + 1
+
+    # Cria edges de bins iguais
+    bins = np.linspace(x_min, x_max, nbins + 1)
+
     fig = go.Figure()
 
-    # Adiciona todos os histogramas, inicialmente visíveis
+    # Adiciona histogramas com bins fixos
     for col in df.columns:
         fig.add_trace(go.Histogram(
             x=df[col],
             name=col,
             opacity=0.75,
-            visible=True
+            visible=True,
+            xbins=dict(
+                start=x_min,
+                end=x_max,
+                size=(x_max - x_min) / nbins   # largura de cada bin
+            )
         ))
 
-    # Cria botões para mostrar/ocultar cada coluna
+    # Calcula y_max fixo com np.histogram usando os mesmos bins
+    for col in df.columns:
+        counts, _ = np.histogram(df[col].dropna(), bins=bins)
+        y_max = max(y_max, counts.max())
+
+    # margem de 10%
+    y_max *= 1.1  
+
+    # Cria botões
     buttons = []
     for i, col in enumerate(df.columns):
         visible = [False] * len(df.columns)
@@ -62,24 +71,35 @@ def interactive_histogram_plotly(df, x_label='X', y_label='Counts', title='', x_
             args=[{"visible": visible}, {"title": f"Histograma: {col}"}]
         ))
 
-    # Botão para mostrar todas as colunas
     buttons.append(dict(
         label="Todas",
         method="update",
         args=[{"visible": [True]*len(df.columns)}, {"title": "Todos os Histogramas"}]
     ))
 
+    # Layout
     fig.update_layout(
-        updatemenus=[dict(active=len(df.columns), buttons=buttons, x=1.1, y=0.8)],
+        updatemenus=[dict(
+            active=len(df.columns),
+            buttons=buttons,
+            x=1.05,
+            y=1,
+            xanchor='left',
+            yanchor='top'
+        )],
         title=title,
         xaxis_title=x_label,
         yaxis_title=y_label,
         barmode='overlay',
         xaxis=dict(range=x_range),
-        yaxis=dict(range=y_range)
+        yaxis=dict(range=[0, y_max])
     )
 
+    #meter widget no sitio certo
+    fig.update_layout( updatemenus=[dict(active=len(df.columns), buttons=buttons, x=1.1, y=0.0)], title=title, xaxis_title=x_label, yaxis_title=y_label, barmode='overlay', xaxis=dict(range=x_range), yaxis=dict(range=[0, y_max]) )
+
     fig.show()
+
 
 def plot_covmatrix(df_):
     df_numerical = df_.select_dtypes(include='number')

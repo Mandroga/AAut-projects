@@ -1,6 +1,5 @@
-# %%
 #import libraries
-
+# %%
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -40,9 +39,14 @@ print(y_train_df.describe())
 sns.pairplot(df,hue ='target', palette='viridis')
 #pairs(df_scaled,target ='target', hue='viridis')
 plt.show()
-sns.histplot(df, kde=True)
+
+# %%
+#sns.histplot(df, kde=True)
+#plt.show()
+#sns.histplot(df_scaled, kde=True)
+print(df_scaled.min().min(),df_scaled[feature_names].max().max())
+
+interactive_histogram_plotly(df_scaled, nbins=50)
 plt.show()
-sns.histplot(df_scaled, kde=True)
-#interactive_histogram_plotly(df_scaled)
-plt.show()
+
 # %%
