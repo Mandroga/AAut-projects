@@ -526,18 +526,29 @@ def filter_df(df_, IQR_multiplier_i=3):
     return filtered_df, outlier_df
 
 #Plots
-def min_multiple_plot_format(N_plots):
-    plot_rows = int(np.floor(np.sqrt(N_plots)))
-    col_ratio = N_plots / plot_rows
-    plot_cols = int(np.floor(col_ratio))
-    xtra_cols = int((col_ratio - plot_cols) * plot_rows)
+def min_multiple_plot_format(N_plots, n_rows=None, n_cols=None):
+    if n_rows == None and n_cols == None:
+        plot_rows = int(np.floor(np.sqrt(N_plots)))
+        col_ratio = N_plots / plot_rows
+        plot_cols = int(np.floor(col_ratio))
+        xtra_cols = int((col_ratio - plot_cols) * plot_rows)
 
-    subplot_format = [plot_cols] * plot_rows
-    subplot_format[:xtra_cols] = [x + 1 for x in subplot_format[:xtra_cols]]
+        subplot_format = [plot_cols] * plot_rows
+        subplot_format[:xtra_cols] = [x + 1 for x in subplot_format[:xtra_cols]]
+       
+    elif n_cols == None:
+        n_cols = int(np.ceil(N_plots/n_rows))
+        subplot_format = [n_cols]*n_rows
+    elif n_rows == None:
+         n_rows = int(np.ceil(N_plots/n_cols))
+         subplot_format = [n_cols]*n_rows
+    else:
+        subplot_format = [n_cols]*n_rows
+    print(subplot_format,'!!!') 
     return subplot_format
-def min_multiple_plot(N_plots, plot_functions, check_box=False):
+def min_multiple_plot(N_plots, plot_functions, check_box=False, n_rows=None, n_cols=None):
     plots = []
-    subplot_format = min_multiple_plot_format(N_plots)
+    subplot_format = min_multiple_plot_format(N_plots, n_rows=n_rows, n_cols=n_cols)
     fig, axes = plt.subplots(len(subplot_format), max(subplot_format))
     for i in range(len(subplot_format)):
         for j in range(subplot_format[i]):
@@ -587,7 +598,7 @@ def min_multiple_plot(N_plots, plot_functions, check_box=False):
         plt.show()
     return fig, axes
 
-def bar_plot(df_, y, X=None, label=None, min_multiples=None ,cmap_name='viridis'):
+def bar_plot(df_, y, X=None, label=None, min_multiples=None ,cmap_name='viridis', n_rows=None, n_cols=None):
     df = df_.copy()
     cat_cols = [X, label, min_multiples]
     cat_cols = [c for c in cat_cols if c!=None]
@@ -778,7 +789,7 @@ def bar_plot(df_, y, X=None, label=None, min_multiples=None ,cmap_name='viridis'
             plot_f = plot_f_lmm
             N = len(min_multiples_unique)
 
-    fig, axes = min_multiple_plot(N, plot_f)
+    fig, axes = min_multiple_plot(N, plot_f, n_rows=n_rows, n_cols=n_cols)
 
     return fig, axes
 
