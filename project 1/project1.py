@@ -51,19 +51,19 @@ df_scaled['target'] = y_scaler.fit_transform(df_scaled[['target']])
 # %% data visualization and information
 
 #info and describe
-if 0:
+if 1:
     print(X.shape, y.shape)
     print(df.info())
     print(df.describe)
 
-if 0:
+if 1:
     def plot_f(subplot, n):
         cols = df_scaled.columns
         subplot.plot(df_scaled[cols[n]], df_scaled['target'], label=cols[n], marker='o', linestyle='', markersize=3, alpha=0.7)
         subplot.grid(True)
         subplot.legend()
     min_multiple_plot(6, plot_f)
-    plt.show()
+   # plt.show()
 
     sns.pairplot(df,hue ='target', palette='viridis')
     plt.show()
@@ -95,10 +95,8 @@ def plot_f(subplot, n):
 
 min_multiple_plot(7, plot_f)
     
-plt.show()
-
 #sns.histplot(data_for_hist, kde=True)
-#plt.show()
+plt.show()
 interactive_histogram_plotly(data_for_hist, nbins=50)
 plt.show()
 
@@ -118,7 +116,7 @@ X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_st
 models = []
 model_names = []
 
-degrees = [0,2,4]
+degrees = [0,2,4,6]
 regressors = [LinearRegression(), Ridge(), Lasso()]
 for degree in degrees:
     for regressor in regressors:
@@ -149,32 +147,17 @@ def plot_f(subplot, n):
     sns.lineplot(x=y_val.flatten(), y=y_val.flatten(), ax=subplot, color='red')
     sns.scatterplot(x=preds[n], y=y_val, ax=subplot, label=f'MAPE: {scores[n][1]:.2f}\n R2: {scores[n][2]:.2f}')
     subplot.grid()
-    subplot.legend(loc='upper left', bbox_to_anchor=(1,1), fontsize=5)
+    subplot.legend(loc='upper left', bbox_to_anchor=(1,1), fontsize=10)
     subplot.set_title(model_names[n])
 
-if 0:
-    min_multiple_plot(len(models), plot_f)
-    plt.tight_layout()
-    plt.show()
 
-fig, axes = bar_plot(score_df, y='score', label='metric', min_multiples='model')
+min_multiple_plot(len(models), plot_f, n_cols=3)
+#plt.tight_layout()
 
-
-def on_click(event):
-    # Check which Axes was clicked
-    axes_flatten = list(axes.flatten())
-    ax_index = axes_flatten.index(event.inaxes)
-    #n_rows, n_cols = min_multiple_plot_format(len(models))
-   # i, j = ax_index // n_cols, ax_index % n_cols
-    model_name = model_names[ax_index]
-    df_ = score_df[(score_df['model']==model_name)]
-    fig2, axes2 = bar_plot(df_, y='score', label='metric', min_multiples='model')
-    plt.show()
+fig, axes = bar_plot(score_df, y='score', label='metric', min_multiples='model', n_cols=3)
 
 
-#fig.canvas.mpl_connect('button_press_event', on_click)
-
-plt.tight_layout()
+#plt.tight_layout()
 plt.show()
 
 '''
@@ -183,6 +166,8 @@ in range 1 to 5, 4 has best scores.
 
 
 '''
+
+
 
 
 

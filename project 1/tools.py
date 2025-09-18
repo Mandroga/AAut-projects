@@ -544,7 +544,6 @@ def min_multiple_plot_format(N_plots, n_rows=None, n_cols=None):
          subplot_format = [n_cols]*n_rows
     else:
         subplot_format = [n_cols]*n_rows
-    print(subplot_format,'!!!') 
     return subplot_format
 def min_multiple_plot(N_plots, plot_functions, check_box=False, n_rows=None, n_cols=None):
     plots = []
