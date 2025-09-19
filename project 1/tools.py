@@ -245,8 +245,11 @@ def plot_umap(df_, target, dimension='2d'):
     else:
         raise ValueError("Dimension must be '2d' or '3d'")
 
-def plot_PCA(df, targets):
-    X_numerical = df.select_dtypes(include='number').drop(targets,axis=1)
+def plot_PCA(df, targets=None):
+    if targets == None:
+        X_numerical = df.select_dtypes(include='number')
+    else:
+        X_numerical = df.select_dtypes(include='number').drop(targets,axis=1)
     stsc = StandardScaler()
     X = stsc.fit_transform(X_numerical)
     pca = PCA()
@@ -582,6 +585,8 @@ def min_multiple_plot(N_plots, plot_functions, check_box=False, n_rows=None, n_c
     
     def on_click(event):
         axes_flatten = list(axes.flatten())
+        if event.inaxes not in axes_flatten:
+            return
         ax_index = axes_flatten.index(event.inaxes)
         fig2, ax2 = plt.subplots()
         plot_functions(ax2, ax_index)
@@ -591,6 +596,7 @@ def min_multiple_plot(N_plots, plot_functions, check_box=False, n_rows=None, n_c
     fig.canvas.mpl_connect('button_press_event', on_click)
 
     if check_box:
+        
         line_by_label = {}
         for subplot in plots:
             for line in subplot.get_lines():
@@ -602,6 +608,7 @@ def min_multiple_plot(N_plots, plot_functions, check_box=False, n_rows=None, n_c
                 if line_by_label.get(label, None) == None: line_by_label[label] = []
                 line_by_label[label].append(scatter)
         labels = [k for k in line_by_label]
+        print(labels)
         if labels != []:
             rax = plt.axes([0.91, 0.05, 0.08, 0.1])
             visibility = [True] * len(labels)
@@ -809,6 +816,62 @@ def bar_plot(df_, y, X=None, label=None, min_multiples=None ,cmap_name='viridis'
     fig, axes = min_multiple_plot(N, plot_f, n_rows=n_rows, n_cols=n_cols)
 
     return fig, axes
+
+
+# Checkboxes get plotted objects (lines and scatters) to labels
+def get_line_by_label(axes):
+    line_by_label = {}
+    for subplot in axes.flatten():
+        for line in subplot.get_lines():
+            label = line.get_label()
+            if line_by_label.get(label, None) == None: line_by_label[label] = []
+            line_by_label[label].append(line)
+        for scatter in subplot.collections:
+            label = scatter.get_label()
+            if line_by_label.get(label, None) == None: line_by_label[label] = []
+            line_by_label[label].append(scatter)
+    return line_by_label
+
+def line_by_label_filter(line_by_label_, str_filter=['']):
+    '''
+    If subplots have been labeled and have a same string, you can group them,
+    for example Train and test sets str_filter = ['Train','Test']
+    '''
+    line_by_label = {x: [item for key, line in line_by_label_.items() if x in key for item in (line if isinstance(line, list) else [line])]for x in str_filter}
+    return line_by_label
+
+    def on_draw(event):
+        labels = list(line_by_label.keys())
+        rax = fig.add_axes([0.85, 0.05, 0.12, 0.2])  # checkbox axes
+        visibility = [True] * len(labels)
+        check = matplotlib.widgets.CheckButtons(rax, labels, visibility)
+
+        def toggle_visibility(label):
+            for plot in line_by_label[label]:
+                plot.set_visible(not plot.get_visible())
+            fig.canvas.draw()  # redraw figure
+
+        check.on_clicked(toggle_visibility)
+        
+        fig.canvas.draw()  # draw checkboxes initially
+        fig.canvas.mpl_disconnect(cid)  # disconnect after first draw
+
+    # Connect the draw_event
+    cid = fig.canvas.mpl_connect('draw_event', on_draw)
+
+
+def add_checkbox(line_by_label):
+    labels = [k for k in line_by_label]
+    rax = plt.axes([0.91, 0.05, 0.08, 0.1])
+    visibility = [True] * len(labels)
+    check = matplotlib.widgets.CheckButtons(rax, labels, visibility)
+    def toggle_visibility(label):
+        for plot in line_by_label[label]:
+            plot.set_visible(not plot.get_visible())
+        plt.draw()
+    check.on_clicked(toggle_visibility)
+    plt.show()
+#-----------
 
 def plot_colors(n_groups, n_elements=1, cmap_name='viridis'):
     cmap = plt.colormaps.get_cmap(cmap_name)
