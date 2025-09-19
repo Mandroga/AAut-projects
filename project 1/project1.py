@@ -108,8 +108,40 @@ Histogram inspection:
 4,5 - Looks normal
 target- seems skewed normal ?
 '''
+#%% Feature selection
 
+if 1:
+    plot_PCA(df, ['target'])
+    plot_PCA(df.drop([3], axis=1), ['target'])
+    plot_PCA(df.drop([3,5], axis=1), ['target'])
+    plt.show()
+
+
+df_ = df.copy()
+df_.columns = df_.columns.astype(str)
+#plot_covmatrix(df_)
+
+
+stsc = StandardScaler()
+X_scaled = stsc.fit_transform(X)
+pca = PCA()
+pca.fit(X_scaled)
+cumulative_variance = pca.explained_variance_ratio_.cumsum()
+pca_component_matrix = pd.DataFrame(pca.components_)
+print(pca_component_matrix)
+print(pca_component_matrix.abs().sum(axis=0)) # Does this give a measure of feature importance ??
+
+loadings = pca.components_.T * np.sqrt(pca.explained_variance_)
+feature_importance = np.sum(loadings**2, axis=1)
+feature_importance /= feature_importance.sum()
+print(feature_importance)
+
+'''
+PCA plot shows that 2 components explain 0 variance, which matches our observation in the pairplot
+where we see that two pairs of features are highly correlated
+'''
 # %% fitting
+
 
 X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
 
@@ -130,17 +162,49 @@ for degree in degrees:
 print(len(models), len(model_names))
 
 preds = []
-scores = []
 score_df = pd.DataFrame(columns=['model','metric','score'])
 metrics = [mean_squared_error, mean_absolute_percentage_error, r2_score]
 metric_names = ['MSE', 'MAPE', 'R2']
+
 for model, model_name in zip(models, model_names):
     model.fit(X_train, y_train)
     y_pred = model.predict(X_val)
     preds.append(y_pred)
-    scores.append((mean_squared_error(y_val, y_pred), mean_absolute_percentage_error(y_val, y_pred), r2_score(y_val, y_pred)))
     for i in range(len(metrics)):
-        score_df.loc[len(score_df)] = [model_name, metric_names[i], scores[-1][i]]
+        score_df.loc[len(score_df)] = [model_name, metric_names[i], metrics[i](y_val, y_pred)]
+
+# %% New fitting
+preds = {}
+score_df = pd.DataFrame(columns=['model','metric','score','train set'])
+metrics = [mean_squared_error, mean_absolute_percentage_error, r2_score]
+metric_names = ['MSE', 'MAPE', 'R2']
+
+X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+
+#linear_regressors = [('Linear Regression',LinearRegression()), ('Ridge Regression',Ridge()), ('Lasso',Lasso())]
+linear_regressors = [LinearRegression(), Ridge(), Lasso()]
+degrees = [1,2,4,6]
+models = {'regressor':linear_regressors, 'degrees':degrees}
+models_combination = dic_combinator(models)
+models = [(Pipeline([('poly', PolynomialFeatures(degree=x['degrees'], include_bias=False)),('linear', x['regressor']))]
+print(models_combination)
+parameter_grid = {'regressor':linear_regressors, 'degree':degrees,'data':['X']}
+
+parameter_combinations = dic_combinator(validation_grid)
+
+for ps in parameter_combinations:
+    regressor_name ,regressor = ps['regressor']
+    degree = ps['degree']
+    X_train, X_val, y_train, y_val = ps['data']
+    
+    model = Pipeline([('poly', PolynomialFeatures(degree=degree, include_bias=False)),('linear', regressor)])
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_val)
+    
+    for i in range(len(metrics)):
+        score_df.loc[len(score_df)] = [model_name, metric_names[i], metrics[i](y_val, y_pred)]
+
+
 
 # %% plot results
 def plot_f(subplot, n):

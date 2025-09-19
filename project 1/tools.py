@@ -102,6 +102,24 @@ def interactive_histogram_plotly(df, x_label='X', y_label='Counts', title='', x_
 
 
 def plot_covmatrix(df_):
+    df_ = df_.select_dtypes(include='number')
+    cols = df_.columns
+    cov_mat = np.cov(df_.T)
+    plt.figure(figsize=(10, 10))
+    sns.set(font_scale=1.5)
+    hm = sns.heatmap(cov_mat,
+                     cbar=True,
+                     annot=True,
+                     square=True,
+                     fmt='.2f',
+                     annot_kws={'size': 12},
+                     yticklabels=cols,
+                     xticklabels=cols)
+    plt.title('Covariance matrix')
+    plt.tight_layout()
+    plt.show()
+
+def plot_corrmatrix(df_):
     df_numerical = df_.select_dtypes(include='number')
     stsc = StandardScaler()
     cols = df_numerical.columns
@@ -117,7 +135,7 @@ def plot_covmatrix(df_):
                      annot_kws={'size': 12},
                      yticklabels=cols,
                      xticklabels=cols)
-    plt.title('Covariance matrix showing correlation coefficients')
+    plt.title('Correlation matrix')
     plt.tight_layout()
     plt.show()
 
@@ -140,7 +158,7 @@ def plot_PCA(df, targets):
     plt.ylabel('Explained Variance Ratio')
     plt.grid(True)
     plt.legend()
-    plt.show()
+    #plt.show()
 
 def plot_covmatrix(df_):
     df_numerical = df_.select_dtypes(include='number')
