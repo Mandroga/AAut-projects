@@ -590,6 +590,7 @@ def min_multiple_plot(N_plots, plot_functions, check_box=False, n_rows=None, n_c
         ax_index = axes_flatten.index(event.inaxes)
         fig2, ax2 = plt.subplots()
         plot_functions(ax2, ax_index)
+        plt.tight_layout()
         plt.show()
 
 
