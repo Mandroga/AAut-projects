@@ -1,3 +1,5 @@
+#%%
+
 %matplotlib inline
 
 import matplotlib as mpl
@@ -17,14 +19,11 @@ from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, mean_absolute_percentage_error, r2_score
 from sklearn.linear_model import Ridge, Lasso
+from sklearn.model_selection import ParameterGrid   
 
-#%%
-# Toy dataset
-#X = np.linspace(0, 10, 20).reshape(-1, 1)  # 20 points from 0 to 10
-#Y = np.sin(X).ravel()                     # target is sin(x) (nonlinear!)
+#%%  
 
-
-#Real Dataset
+# Dataset
 X = np.load("X_train.npy")
 Y= np.load('Y_train.npy')
 
@@ -32,7 +31,6 @@ Y= np.load('Y_train.npy')
 for i in range(6):
     plt.figure()
     plt.scatter(X[:,i], Y, c='k', marker='o')
-    #plt.title("Toy dataset for RBF + Linear Regression")
     plt.xlabel("X")
     plt.ylabel("Y")
     plt.title(f"Feature {i} vs Target")
@@ -45,6 +43,12 @@ np.min(np.abs(y_train)), np.min(np.abs(y_val))
 # %%
 
 def smape(y_true, y_pred):
+
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)   
+    return 100/len(y_true) * np.sum(2 * np.abs(y_pred - y_true) / (np.abs(y_true) + np.abs(y_pred)))
+
+def biasssmape(y_true, y_pred):
     """
     Symmetric Mean Absolute Percentage Error
     Works with negative and positive values
@@ -52,8 +56,8 @@ def smape(y_true, y_pred):
     y_true = np.array(y_true)
     y_pred = np.array(y_pred)
     return np.sum(y_pred - y_true)/np.sum((np.abs(y_true) + np.abs(y_pred)))    
-    #return 100/len(y_true) * np.sum(2 * np.abs(y_pred - y_true) / (np.abs(y_true) + np.abs(y_pred)))
 
+# %%                            
 class RBFFeatures(BaseEstimator, TransformerMixin):
     def __init__(self, sigma=1.0, M=5):
         self.sigma = sigma
@@ -81,35 +85,98 @@ class RBFFeatures(BaseEstimator, TransformerMixin):
         Phi = np.exp(-np.sum(diffs**2, axis=2) / (2 * self.sigma**2))
         return Phi
 
-metric_names = ['MSE', 'bias-sensitive SMAPE', 'R2']
-predictions = []
+metric_names = ['MSE', "SMAPE", 'bias-sensitive SMAPE', 'R2']
+ #%% Hyperparameter Tuning and Model Evaluation
+scores_rbf = []  
+metrics = {
+    "MSE": mean_squared_error,
+    "SMAPE": smape,
+    "bias-sensitive SMAPE": biasssmape,
+    "R2": r2_score
+}
+
+
 scores_rbf = []
-min_val= min(int(np.sqrt(X_train.shape[0])), int(X_train.shape[0]/3))
+metrics = {"MSE": mean_squared_error, "SMAPE": smape, "bias-sensitive SMAPE": biasssmape, "R2": r2_score}
+
+# calcula range para M
+min_val = min(int(np.sqrt(X_train.shape[0])), int(X_train.shape[0]/3))
 max_val = max(int(np.sqrt(X_train.shape[0])), int(X_train.shape[0]/3))
-for i in range(min_val,max_val):  # Test different numbers of RBFs):
-    model = Pipeline([
+
+# grids separados: LinearRegression (sem alpha), Ridge/Lasso (com alphas diferentes)
+param_grid = [
+    {"M": range(min_val, max_val), "model": [LinearRegression()], "alpha": [None]},
+    {"M": range(min_val, max_val), "model": [Ridge()], "alpha": [0.01, 0.1, 1.0]},
+    {"M": range(min_val, max_val), "model": [Lasso()], "alpha": [0.001, 0.005, 0.01]}
+]
+
+for params in ParameterGrid(param_grid):
+    M_val = params["M"]
+    model_instance = params["model"]
+    alpha = params["alpha"]
+
+    # só aplica alpha se fizer sentido
+    if alpha is not None:
+        model_instance.set_params(alpha=alpha)
+
+    pipeline = Pipeline([
         ("scaler", StandardScaler()),
-        ("RBS", RBFFeatures(M=i+1)),
-        ("linreg", LinearRegression())
-        ])
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_val)
-    predictions.append(y_pred)
-    MSE= mean_squared_error(y_val, y_pred)
-    SMAPE= smape(y_val, y_pred)
-    R2= r2_score(y_val, y_pred) 
-    scores_rbf.append((i, (MSE, SMAPE, R2)))
-    #print(f'RBF M={M}, MSE: {mean_squared_error(y_val, y_pred)}, MAPE: {mean_absolute_percentage_error(y_val, y_pred)}, R2: {r2_score(y_val, y_pred)}')
+        ("RBS", RBFFeatures(M=M_val)),
+        ("reg", model_instance)
+    ])
 
-fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+    pipeline.fit(X_train, y_train)
+    y_pred = pipeline.predict(X_val)
 
-for i, name in enumerate(metric_names):
-    axes[i].scatter([pt[0]+1 for pt in scores_rbf], [pt[1][i] for pt in scores_rbf], c='#17becf')
-    axes[i].set_xlabel('Number of RBFs (M)')
-    axes[i].set_ylabel(name)
-    axes[i].set_title(f'RBF Model Performance: {name}')
+    # guarda métricas
+    for name, func in metrics.items():
+        score = func(y_val, y_pred)
+        scores_rbf.append((
+            M_val,
+            type(model_instance).__name__,
+            alpha if alpha is not None else "N/A",  # LinearRegression não tem alpha
+            name,
+            score
+        ))
+
+df_scores = pd.DataFrame(scores_rbf, columns=["n_rbf", "model", "alpha", "metric", "score"])
+
+#%% Plotting Results
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+
+fig, axes = plt.subplots(1, len(metric_names), figsize=(18, 5), sharey=False)
+
+for ax, metric in zip(axes, metric_names):
+    subset = df_scores[df_scores["metric"] == metric].copy()
+    
+    # cria coluna combinando modelo + alpha
+    subset["model_alpha"] = subset["model"] + " (alpha=" + subset["alpha"].astype(str) + ")"
+    
+    sns.lineplot(
+        data=subset,
+        x="n_rbf",
+        y="score",
+        hue="model_alpha",
+        ax=ax
+    )
+    
+    ax.set_xlabel("Number of RBFs (M)")
+    ax.set_ylabel(metric)
+    ax.set_title(f"RBF Model Performance: {metric}")
+
+# remove legend de todos os eixos
+for ax in axes:
+    ax.get_legend().remove()
+
+# cria legenda única abaixo do gráfico
+handles, labels = axes[0].get_legend_handles_labels()
+fig.legend(handles, labels, loc='lower center', ncol=4, frameon=False, bbox_to_anchor=(0.5, -0.25))
 
 plt.tight_layout()
 plt.show()
+
 
 # %%
