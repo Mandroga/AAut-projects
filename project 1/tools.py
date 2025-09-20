@@ -667,12 +667,15 @@ def bar_plot(df_, y, X=None, label=None, min_multiples=None ,cmap_name='viridis'
             init_pos = bar_pos[-1] + space_width
 
         # Plot all bars
-        subplot.bar(
+        bars = subplot.bar(
             x=bar_pos,
             height=heights,
             width=bar_width,
             color=bar_colors
         )
+
+        #Bar numbers
+        bar_numbers(subplot, bars)
 
         # Create one legend entry per unique label
         handles = [mpatches.Patch(color=color_map[lbl], label=lbl) for lbl in label_unique]
@@ -724,7 +727,7 @@ def bar_plot(df_, y, X=None, label=None, min_multiples=None ,cmap_name='viridis'
             bar_colors.append(color_map[label_i])
 
         # Plot all bars
-        subplot.bar(
+        bars = subplot.bar(
             x=bar_pos,
             height=heights,
             width=bar_width,
@@ -734,9 +737,8 @@ def bar_plot(df_, y, X=None, label=None, min_multiples=None ,cmap_name='viridis'
         handles = [mpatches.Patch(color=color_map[lbl], label=lbl) for lbl in label_unique]
         subplot.legend(handles=handles, loc='lower left', bbox_to_anchor=(0.01, 0.01), fontsize='small')
 
-        # Create one legend entry per unique label
-        # handles = [mpatches.Patch(color=color_map[lbl], label=lbl) for lbl in label_unique]
-        # subplot.legend(handles=handles)
+        #Bar numbers
+        bar_numbers(subplot, bars)
 
         subplot.set_title(min_multiples_unique[n])
         # subplot.set_xticks(ticks)
@@ -777,13 +779,15 @@ def bar_plot(df_, y, X=None, label=None, min_multiples=None ,cmap_name='viridis'
             init_pos = bar_pos[-1] + space_width
 
         # Plot all bars
-        subplot.bar(
+        bars = subplot.bar(
             x=bar_pos,
             height=heights,
             width=bar_width,
             color=bar_colors
         )
 
+        #Bar numbers
+        bar_numbers(subplot, bars)
         # Legend
         handles = [mpatches.Patch(color=color_map[lbl], label=lbl) for lbl in label_unique]
         subplot.legend(
@@ -799,6 +803,19 @@ def bar_plot(df_, y, X=None, label=None, min_multiples=None ,cmap_name='viridis'
         subplot.set_xlabel(X)
         subplot.set_title("Bar Plot")  # pode personalizar
         subplot.grid(True)
+
+    def bar_numbers(subplot, bars):
+        # Add values above bars
+        for bar in bars:
+            height = bar.get_height()
+            subplot.text(
+                bar.get_x() + bar.get_width() / 2,  # x position (center of bar)
+                height,                              # y position (top of bar)
+                f'{height:.2f}',                     # label text
+                ha='center',                         # horizontal alignment
+                va='bottom',                         # vertical alignment
+                fontsize=8                            # optional font size
+            )
 
     if 1:
         if X: X_unique = df[X].unique()

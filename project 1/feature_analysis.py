@@ -36,6 +36,7 @@ X_sps = pd.DataFrame(poly_scaler.fit_transform(X_scaled_poly), columns=X_scaled_
 plot_PCA(df, ['target'])
 plot_PCA(df.drop(['3'], axis=1), ['target'])
 plot_PCA(df.drop(['3','5'], axis=1), ['target'])
+plot_PCA(df.drop(['1','3','5'], axis=1), ['target'])
 plot_covmatrix(df)
 
 #Testing Poly Features -- (is this useful?)
