@@ -1,6 +1,9 @@
 # %% data and imports
+from turtle import pd
+
+
 %run imports_data.py
-# %% Fitting - Models and hyperparameters
+# %% Fitting metrics
 # ------- Custom winsorized MAPE -------
 def winsorized_mape(y_true, y_pred, q=0.95):
     errors = np.abs((y_true - y_pred) / y_true)
@@ -12,6 +15,64 @@ def winsorized_mape(y_true, y_pred, q=0.95):
 metrics = [mean_squared_error, mean_absolute_percentage_error, winsorized_mape, r2_score]
 metric_names = ['MSE', 'MAPE', 'wMAPE','R2']
 
+def score_preds_cv(X, y, kf, score_df, preds, grid):
+    for ps in grid:
+        model_name, model = ps['model']
+
+        iter_name = model_name
+        preds[iter_name] = {'train_p':[],'train_t':[],'val_p':[],'val_t':[]}
+        
+        for fold, (train_idx, val_idx) in enumerate(kf.split(X)):
+            X_train, X_val = X[train_idx], X[val_idx]
+            y_train, y_val = y[train_idx], y[val_idx]
+            
+            # Fit and predict
+            model.fit(X_train, y_train)
+            y_pred_train = model.predict(X_train)
+            y_pred_val = model.predict(X_val)
+
+            preds[iter_name]['train_p'].append(y_pred_train)
+            preds[iter_name]['val_p'].append(y_pred_val)
+            preds[iter_name]['train_t'].append(y_train)
+            preds[iter_name]['val_t'].append(y_val)
+
+            # Compute metrics
+            sets = [['train_p', y_train, y_pred_train], ['val_p', y_val, y_pred_val]]
+            for set_name, truth, pred in sets:
+                for i, metric in enumerate(metrics):
+                    score_df.loc[len(score_df)] = [
+                        model_name, metric_names[i], fold+1, set_name, metric(truth, pred)
+                    ]
+
+    # ------- Summary: mean ± std per metric per model -------
+    score_df = score_df.groupby(['model','metric','set']).score.agg(['mean']).reset_index()
+    score_df['score']=score_df['mean']
+    score_df.drop('mean',axis=1,inplace=True)
+    return score_df, preds
+
+def score_preds_tts(X, y, score_df, preds, grid, test_size=0.2):
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=test_size, random_state=random_state)
+    for ps in grid:
+        model_name, model = ps['model']
+        iter_name = model_name
+        
+        model.fit(X_train, y_train)
+        y_pred_train = model.predict(X_train)
+        y_pred_val = model.predict(X_val)
+        
+        preds[iter_name] = {'train_p':[],'train_t':[],'val_p':[],'val_t':[]}
+        preds[iter_name]['train_p'].append(y_pred_train)
+        preds[iter_name]['val_p'].append(y_pred_val)
+        preds[iter_name]['train_t'].append(y_train)
+        preds[iter_name]['val_t'].append(y_val)
+        
+        sets = [['train_p',y_train, y_pred_train], ['val_p', y_val, y_pred_val]]
+        for set_name, truth, pred in sets:
+            for i in range(len(metrics)):
+                score_df.loc[len(score_df)] = [model_name, metric_names[i],set_name, metrics[i](truth, pred)]
+
+
+# %% Fitting - Models and hyperparameters
 # ------- Example regressors & degrees -------
 regressors_nofs = [LinearRegression(), Ridge(), Lasso(), PLSRegression(n_components=6)]
 degrees_nofs = [1,2,4,6]
@@ -49,91 +110,24 @@ Some features might be unnecessary
 
 evaluating with no feature selection
 '''
-
 preds_tts = {}
 score_df_tts = pd.DataFrame(columns=['model','metric','set','score'])
-preds = {}
-score_df = pd.DataFrame(columns=['model','metric','set','score'])
+score_df_tts, preds_tts = score_preds_tts(X, y, score_df_tts, preds_tts, grid, test_size=0.2)
 
-X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
-
-for ps in grid:
-    model_name, model = ps['model']
-    
-    iter_name = model_name
-    
-    model.fit(X_train, y_train)
-    y_pred_train = model.predict(X_train)
-    y_pred_val = model.predict(X_val)
-    
-    preds[iter_name] = {'train_p':[],'train_t':[],'val_p':[],'val_t':[]}
-    preds[iter_name]['train_p'].append(y_pred_train)
-    preds[iter_name]['val_p'].append(y_pred_val)
-    preds[iter_name]['train_t'].append(y_train)
-    preds[iter_name]['val_t'].append(y_val)
-    
-    sets = [['train_p',y_train, y_pred_train], ['val_p', y_val, y_pred_val]]
-    for set_name, truth, pred in sets:
-        for i in range(len(metrics)):
-            score_df.loc[len(score_df)] = [model_name, metric_names[i],set_name, metrics[i](truth, pred)]
-
-score_df_tts = score_df
-preds_tts = preds
-print(score_df.columns)
-print(score_df.shape)
 
 # %% Fitting - CV
 '''
 Fitting with no feature selection
 '''
-
-# ------- Prepare results -------
 preds_cv = {}
 score_df_cv = pd.DataFrame(columns=['model','metric','fold','set','score'])
+kf = KFold(n_splits=5, shuffle=True, random_state=42)
+score_df_cv, preds_cv = score_preds_cv(X, y, kf, score_df_cv, preds_cv, grid)
 
-# ------- K-Fold CV -------
-kf = KFold(n_splits=2, shuffle=True, random_state=42)
-
-X = X.values if hasattr(X,'values') else X  # convert to array if dataframe
-y = y.values if hasattr(y,'values') else y
-
-for ps in grid:
-    model_name, model = ps['model']
-
-    iter_name = model_name
-    preds_cv[iter_name] = {'train_p':[],'train_t':[],'val_p':[],'val_t':[]}
-    
-    for fold, (train_idx, val_idx) in enumerate(kf.split(X)):
-        X_train, X_val = X[train_idx], X[val_idx]
-        y_train, y_val = y[train_idx], y[val_idx]
-        
-        # Fit and predict
-        model.fit(X_train, y_train)
-        y_pred_train = model.predict(X_train)
-        y_pred_val = model.predict(X_val)
-        
-        preds_cv[iter_name]['train_p'].append(y_pred_train)
-        preds_cv[iter_name]['val_p'].append(y_pred_val)
-        preds_cv[iter_name]['train_t'].append(y_train)
-        preds_cv[iter_name]['val_t'].append(y_val)
-        
-        # Compute metrics
-        sets = [['train_p', y_train, y_pred_train], ['val_p', y_val, y_pred_val]]
-        for set_name, truth, pred in sets:
-            for i, metric in enumerate(metrics):
-                score_df_cv.loc[len(score_df_cv)] = [
-                    model_name, metric_names[i], fold+1, set_name, metric(truth, pred)
-                ]
-
-# ------- Summary: mean ± std per metric per model -------
-score_df_cv = score_df_cv.groupby(['model','metric','set']).score.agg(['mean']).reset_index()
-score_df_cv['score']=score_df_cv['mean']
-score_df_cv.drop('mean',axis=1,inplace=True)
-
-# %% plot results
+# %% plot function
 def plot_f(subplot, n, data):
-    score_df_, preds_ = data
-    model_name, _ = grid[n]['model']
+    score_df_, preds_, grid_ = data
+    model_name, _ = grid_[n]['model']
     iter_name = model_name
 
     #scores
@@ -169,6 +163,23 @@ def plot_f(subplot, n, data):
     subplot.legend(loc='upper left', bbox_to_anchor=(1,1), fontsize=10)
     subplot.set_title(model_name)
 
+# %% plot results - no feature selection
+#overfitting comparison
+if 1:
+    scores_tts = score_df_tts.pivot(index=['model', 'metric'], columns='set', values='score')
+    score_diff_tts = (scores_tts['train_p'] - scores_tts['val_p'])
+    scores_cv = score_df_cv.pivot(index=['model', 'metric'], columns='set', values='score')
+    score_diff_cv = (scores_cv['train_p'] - scores_cv['val_p'])
+    score_diff_df = pd.DataFrame()
+    score_diff_df['tts'] = score_diff_tts
+    score_diff_df['cv'] = score_diff_cv
+    d = {'tts':score_diff_tts, 'cv':score_diff_cv}
+    overfit_df = pd.DataFrame(columns=['MAPE', 'wMAPE', 'R2'], index=['tts', 'cv'])
+    for key in d:
+        for metric in ['MAPE', 'wMAPE', 'R2']:
+            overfit_df.loc[key, metric] = trim_mean(d[key].xs(metric, level='metric'), 0.1)
+    print(overfit_df)
+
 # tts
 if 0:
     fig, axes = min_multiple_plot(len(models), lambda s, n: plot_f(s,n, (score_df, preds)), n_cols=4)
@@ -184,12 +195,6 @@ if 0:
     line_by_label['ideal'] = line_by_label_['_child0']
     add_checkbox(line_by_label)
 
-# bar plot cv
-if 1:
-    bar_plot_df = score_df_cv[score_df_cv['metric'] != 'MSE']
-
-    fig, axes = bar_plot(bar_plot_df[bar_plot_df['set']=='val_p'], y='score', label='metric', min_multiples='model', n_cols=4)
-    fig.suptitle('scores on cv no feature selection')
 #heatmap cv
 if 0:
     heat_map_df = score_df_cv.query('set == "val_p" and metric == "wMAPE"')
@@ -208,11 +213,12 @@ if 0:
 '''
 As we increase polynomial degree, we see prediction becoming linear, but for some points error increases, MAPE explodes
 wMAPE, which clips errors above the 95% quantile, shows that validation MAPE is much higher due to the errors above the 95% quantile
-
+Why is CV R2 train-val higher than tts? cv r2 overfitting more than tts ?
+MAPE and wMAPE justify cross validation.
 
 '''
 
-# %% Fitting with feature selection
+# %% Fitting - CV filter feature selection
 
 class DropHighlyCorrelated(BaseEstimator, TransformerMixin):
     def __init__(self, threshold=0.9):
@@ -243,17 +249,17 @@ class DropLowTargetCorrelation(BaseEstimator, TransformerMixin):
         return pd.DataFrame(X).iloc[:, self.features_to_keep_].values
 
 
-regressors_fs = [LinearRegression(), Ridge(), Lasso(), PLSRegression(n_components=6)]
-degrees_fs = [4,6]
+regressors_f = [LinearRegression(), Ridge(), Lasso(), PLSRegression(n_components=6)]
+degrees_f = [4,6]
 
-regressors = regressors_fs
-degrees= degrees_fs
+regressors = regressors_f
+degrees= degrees_f
 
 param_grid = {'regressor': regressors,'degree': degrees}
 
 grid = ParameterGrid(param_grid)
 
-models = [
+models_f = [
     (
         f"{params['regressor'].__class__.__name__} {params['degree']}º",
         Pipeline([
@@ -266,118 +272,17 @@ models = [
     for params in grid
 ]
 
-grid = ParameterGrid({'model': models})
+grid_f = ParameterGrid({'model': models_f})
 
-
-# ------- Prepare results -------
-preds_cv_fs = {}
-score_df_cv_fs = pd.DataFrame(columns=['model','metric','fold','set','score'])
-
-preds = preds_cv_fs
-score_df = score_df_cv_fs
-
-# ------- K-Fold CV -------
+preds_cv_f = {}
+score_df_cv_f = pd.DataFrame(columns=['model','metric','fold','set','score'])
 kf = KFold(n_splits=2, shuffle=True, random_state=42)
+score_df_cv_f, preds_df_cv_f = score_preds_cv(X, y, kf, score_df_cv_f, preds_cv_f, grid_f)
 
-X = X.values if hasattr(X,'values') else X  # convert to array if dataframe
-y = y.values if hasattr(y,'values') else y
-
-for ps in grid:
-    model_name, model = ps['model']
-
-    iter_name = model_name
-    preds[iter_name] = {'train_p':[],'train_t':[],'val_p':[],'val_t':[]}
-    
-    for fold, (train_idx, val_idx) in enumerate(kf.split(X)):
-        X_train, X_val = X[train_idx], X[val_idx]
-        y_train, y_val = y[train_idx], y[val_idx]
-        
-        # Fit and predict
-        model.fit(X_train, y_train)
-
-        if 1:
-            print(model_name)
-            X_poly = model.named_steps['poly'].transform(X_train)
-            print("Features after polynomial expansion:", X_poly.shape[1])
-
-            # After dropping highly correlated features
-            X_drop_corr = model.named_steps['drop_corr'].transform(X_poly)
-            print("Features after dropping correlated features:", X_drop_corr.shape[1])
-
-            # After dropping low correlation with target
-            X_final = model.named_steps['drop_low_target'].transform(X_drop_corr)
-            print("Features after dropping low target correlation:", X_final.shape[1])
-
-        y_pred_train = model.predict(X_train)
-        y_pred_val = model.predict(X_val)
-        
-        preds[iter_name]['train_p'].append(y_pred_train)
-        preds[iter_name]['val_p'].append(y_pred_val)
-        preds[iter_name]['train_t'].append(y_train)
-        preds[iter_name]['val_t'].append(y_val)
-        
-        # Compute metrics
-        sets = [['train_p', y_train, y_pred_train], ['val_p', y_val, y_pred_val]]
-        for set_name, truth, pred in sets:
-            for i, metric in enumerate(metrics):
-                score_df.loc[len(score_df)] = [
-                    model_name, metric_names[i], fold+1, set_name, metric(truth, pred)
-                ]
-
-# ------- Summary: mean ± std per metric per model -------
-score_df = score_df.groupby(['model','metric','set']).score.agg(['mean']).reset_index()
-score_df['score']=score_df['mean']
-score_df.drop('mean',axis=1,inplace=True)
-
-preds_cv_fs = preds
-score_df_cv_fs = score_df
-
-# %% plot results - feature selection
-def plot_f(subplot, n, data):
-    score_df_, preds_ = data
-    model_name, _ = grid[n]['model']
-    iter_name = model_name
-
-    #scores
-    scores = {}
-    set_names = ['train_p','val_p']
-    used_metric_names = ['MAPE', 'wMAPE', 'R2']
-    for set_name in set_names:
-        scores[set_name] = {}
-        for metric in used_metric_names:
-            scores[set_name][metric] = score_df_.query(f'model == "{model_name}" and set == "{set_name}" and metric == "{metric}"')['score'].iloc[0]
-
-    #ideal
-
-    target = preds_[iter_name]['val_t'] 
-    y = np.concatenate(target)
-    sns.lineplot(x=y, y=y, ax=subplot, color='red')
-    
-    #scatters
-    alphas = {'train_p':0.5,'val_p':1}
-    y_set = {'train_p':y_train, 'val_p':y_val}
-    for set_name in set_names:
-         txt = set_name
-         for metric in used_metric_names:
-             txt += f'\n{metric}: {scores[set_name][metric]:.2f}'
-         x = preds_[iter_name][set_name]
-         target = preds_[iter_name][set_name.replace('_p','_t')] 
-         x = np.concatenate(x)
-         y = np.concatenate(target)
-         sns.scatterplot(x=x, y=y, ax=subplot, label=txt,alpha=alphas[set_name])
-
-  
-    subplot.grid()
-    subplot.legend(loc='upper left', bbox_to_anchor=(1,1), fontsize=10)
-    subplot.set_title(model_name)
-
-# tts
-if 0:
-    fig, axes = min_multiple_plot(len(models), lambda s, n: plot_f(s,n, (score_df, preds)), n_cols=4)
-    fig.suptitle('train test split')
+# %% plot results - filter feature selection
 # CV 
-if 0:
-    fig, axes = min_multiple_plot(len(models), lambda s, n: plot_f(s, n, (score_df_cv_fs, preds_cv_fs)), n_cols=4)
+if 1:
+    fig, axes = min_multiple_plot(len(models), lambda s, n: plot_f(s, n, (score_df_cv_f, preds_cv_f, grid_f)), n_cols=4)
     fig.suptitle('CV')
 #checkboxes
 if 0:
@@ -387,25 +292,25 @@ if 0:
     add_checkbox(line_by_label)
 
 # bar plot cv fs
-if 1:
-    bar_plot_df = score_df_cv_fs[score_df_cv_fs['metric'] != 'MSE']
+if 0:
+    bar_plot_df = score_df_cv_f[score_df_cv_f['metric'] != 'MSE']
 
     fig, axes = bar_plot(bar_plot_df[bar_plot_df['set']=='val_p'], y='score', label='metric', min_multiples='model', n_cols=2)
     fig.suptitle('scores on cv with feature selection')
 #heatmap cv
 if 0:
-    heat_map_df_fs = score_df_cv_fs.query('set == "val_p" and metric == "wMAPE"')
-    heat_map_df_fs['model name'] = heat_map_df_fs['model'].str.split(' ').str[0]
-    heat_map_df_fs['degree'] = heat_map_df_fs['model'].str.split(' ').str[1].str.replace('º','')
-    heat_map_df_fs.drop(['metric','model','set'],axis=1,inplace=True)
-    heat_map_df_fs = heat_map_df_fs.pivot_table(index='model name', columns='degree', values='score')
-    print(heat_map_df_fs)
+    heat_map_df_f = score_df_cv_f.query('set == "val_p" and metric == "wMAPE"')
+    heat_map_df_f['model name'] = heat_map_df_f['model'].str.split(' ').str[0]
+    heat_map_df_f['degree'] = heat_map_df_f['model'].str.split(' ').str[1].str.replace('º','')
+    heat_map_df_f.drop(['metric','model','set'],axis=1,inplace=True)
+    heat_map_df_f = heat_map_df_f.pivot_table(index='model name', columns='degree', values='score')
+    print(heat_map_df_f)
 
     fig, ax = plt.subplots()
     ax.set_title('wMAPE score heatmap with feature selection')
-    sns.heatmap(heat_map_df_fs, annot=True, cmap='coolwarm', ax=ax)
+    sns.heatmap(heat_map_df_f, annot=True, cmap='coolwarm', ax=ax)
 
-plt.show()
+#plt.show()
 
 #Mape is still huge, outliers ?
 
@@ -421,4 +326,65 @@ wMAPE - 0.33 Ridge 4º fs | 0.43 Lasso 4º nofs
 But we havent tried different hyperparameters yet..
 
 '''
-# %%
+# %% Fitting - feature selection wrapper - Models and hyperparameters
+regressors_w = [LinearRegression(), Ridge(), Lasso()]
+degrees_w = [1,2,4,6]
+
+regressors = regressors_w
+degrees = degrees_w
+
+param_grid = {'regressor': regressors,'degree': degrees}
+
+grid = ParameterGrid(param_grid)
+
+models_w = [
+    (
+        f"{params['regressor'].__class__.__name__} {params['degree']}º RFE",
+        Pipeline([
+            ('poly', PolynomialFeatures(degree=params['degree'], include_bias=False)),
+            ('RFE', RFECV(estimator=params['regressor'], step=0.1, cv=5, scoring='neg_mean_squared_error')),
+            ('regressor', params['regressor'])
+        ])
+    )
+    for params in grid
+]
+
+grid_w = ParameterGrid({'model': models})
+
+
+# %% Fitting with wrapper
+preds_cv_w = {}
+score_df_cv_w = pd.DataFrame(columns=['model','metric','fold','set','score'])
+kf = KFold(n_splits=5, shuffle=True, random_state=42)
+score_df_cv_w, preds_cv_w = score_preds_cv(X, y, kf, score_df_cv_w, preds_cv_w, grid_w)
+# %% Wrapper results - plot
+# CV - RFE
+if 1:
+    fig, axes = min_multiple_plot(len(models), lambda s, n: plot_f(s, n, (score_df_cv_w, preds_cv_w, grid_w)), n_cols=None)
+    fig.suptitle('CV with RFE')
+#checkboxes
+if 0:
+    line_by_label_ = get_line_by_label(axes)
+    line_by_label = line_by_label_filter(line_by_label_, ['Train','Val'])
+    line_by_label['ideal'] = line_by_label_['_child0']
+    add_checkbox(line_by_label)
+
+    bar_plot_df = score_df_cv_f[score_df_cv_f['metric'] != 'MSE']
+
+    fig, axes = bar_plot(bar_plot_df[bar_plot_df['set']=='val_p'], y='score', label='metric', min_multiples='model', n_cols=2)
+    fig.suptitle('scores on cv with feature selection')
+#heatmap cv
+if 0:
+    heat_map_df_f = score_df_cv_f.query('set == "val_p" and metric == "wMAPE"')
+    heat_map_df_f['model name'] = heat_map_df_f['model'].str.split(' ').str[0]
+    heat_map_df_f['degree'] = heat_map_df_f['model'].str.split(' ').str[1].str.replace('º','')
+    heat_map_df_f.drop(['metric','model','set'],axis=1,inplace=True)
+    heat_map_df_f = heat_map_df_f.pivot_table(index='model name', columns='degree', values='score')
+    print(heat_map_df_f)
+
+    fig, ax = plt.subplots()
+    ax.set_title('wMAPE score heatmap with feature selection')
+    sns.heatmap(heat_map_df_f, annot=True, cmap='coolwarm', ax=ax)
+
+# %% show plots
+plt.show()

@@ -35,6 +35,7 @@ from sklearn.feature_selection import mutual_info_regression, mutual_info_classi
 from sklearn.feature_selection import VarianceThreshold
 from sklearn.model_selection import ParameterGrid
 from sklearn.base import BaseEstimator, TransformerMixin
+from scipy.stats import trim_mean
 
 # %% import data
 
