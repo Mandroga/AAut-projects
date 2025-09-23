@@ -66,20 +66,29 @@ def score_preds_tts(X, y, score_df, preds, grid, test_size=0.2):
         for set_name, truth, pred in sets:
             for i in range(len(metrics)):
                 score_df.loc[len(score_df)] = [model_name, metric_names[i],set_name, metrics[i](truth, pred)]
+    return score_df, preds
 
-def overfit_table(df1, df2, metric_names,df_names=['df1','df2']):
-    d = {df_names[0]:df1, df_names[1]:df2}
-    df1 = df1.pivot(index=['model', 'metric'], columns='set', values='score')
-    df1_diff = (df1['train_p'] - df1['val_p'])
-    df2= df2.pivot(index=['model', 'metric'], columns='set', values='score')
-    df2 = (df2['train_p'] - df2['val_p'])
-    score_diff_df = pd.DataFrame()
-    for key, df in d.items():
-        score_diff_df[key] = df
+def overfit_table(df1, df2, metric_names, df_names=['df1', 'df2']):
+    # Pivot both dfs
+    df1_p = df1.pivot(index=['model', 'metric'], columns='set', values='score')
+    df2_p = df2.pivot(index=['model', 'metric'], columns='set', values='score')
+    
+    # Compute differences
+    df1_diff = df1_p['train_p'] - df1_p['val_p']
+    df2_diff = df2_p['train_p'] - df2_p['val_p']
+    
+    # Put them into a dict
+    d = {df_names[0]: df1_diff, df_names[1]: df2_diff}
+    
+    # Create output DataFrame
     overfit_df = pd.DataFrame(columns=metric_names, index=df_names)
-    for key in d:
+    
+    for key, df in d.items():
         for metric in metric_names:
-            overfit_df.loc[key, metric] = trim_mean(d[key].xs(metric, level='metric'), 0.1)
+            # Select all values for this metric across models
+            vals = df.xs(metric, level='metric')
+            overfit_df.loc[key, metric] = trim_mean(vals, 0.1)
+    
     return overfit_df
 
 def plot_f(subplot, n, data):
@@ -104,7 +113,6 @@ def plot_f(subplot, n, data):
     
     #scatters
     alphas = {'train_p':0.5,'val_p':1}
-    y_set = {'train_p':y_train, 'val_p':y_val}
     for set_name in set_names:
          txt = set_name
          for metric in used_metric_names:
@@ -162,14 +170,10 @@ metric_names = ['MSE', 'MAPE', 'wMAPE','R2']
 regressors_nofs = [LinearRegression(), Ridge(), Lasso(), PLSRegression(n_components=6)]
 degrees_nofs = [1,2,4,6]
 
-regressors = regressors_nofs
-degrees = degrees_nofs
-
-param_grid = {'regressor': regressors,'degree': degrees}
-
+param_grid = {'regressor': regressors_nofs,'degree': degrees_nofs}
 grid = ParameterGrid(param_grid)
 
-models = [
+models_nofs = [
     (
         f"{params['regressor'].__class__.__name__} {params['degree']}º",
         Pipeline([
@@ -180,7 +184,7 @@ models = [
     for params in grid
 ]
 
-grid = ParameterGrid({'model': models})
+grid_nofs = ParameterGrid({'model': models_nofs})
 # %% No feature selection - train test split
 '''
 We want to test different linear regressors,
@@ -195,32 +199,32 @@ Some features might be unnecessary
 
 evaluating with no feature selection
 '''
-preds_tts = {}
-score_df_tts = pd.DataFrame(columns=['model','metric','set','score'])
-score_df_tts, preds_tts = score_preds_tts(X, y, score_df_tts, preds_tts, grid, test_size=0.2)
+preds_tts_nofs = {}
+score_df_tts_nofs = pd.DataFrame(columns=['model','metric','set','score'])
+score_df_tts_nofs, preds_tts_nofs = score_preds_tts(X, y, score_df_tts_nofs, preds_tts_nofs, grid_nofs, test_size=0.2)
 
 
 # %% No feature selection - CV
 '''
 Fitting with no feature selection
 '''
-preds_cv = {}
-score_df_cv = pd.DataFrame(columns=['model','metric','fold','set','score'])
+preds_cv_nofs = {}
+score_df_cv_nofs = pd.DataFrame(columns=['model','metric','fold','set','score'])
 kf = KFold(n_splits=5, shuffle=True, random_state=42)
-score_df_cv, preds_cv = score_preds_cv(X, y, kf, score_df_cv, preds_cv, grid)
+score_df_cv_nofs, preds_cv_nofs = score_preds_cv(X, y, kf, score_df_cv_nofs, preds_cv_nofs, grid_nofs)
 
 
 # %% No feature selection - plots
 #overfitting comparison
 
-overfit_table(score_df_tts, score_df_cv, metric_names=['MSE','MAPE','wMAPE','R2'], df_names=['tts','cv'])
+print(overfit_table(score_df_tts_nofs, score_df_cv_nofs, metric_names=['MSE','MAPE','wMAPE','R2'], df_names=['tts','cv']))
 # tts
 if 0:
-    fig, axes = min_multiple_plot(len(models), lambda s, n: plot_f(s,n, (score_df, preds)), n_cols=4)
+    fig, axes = min_multiple_plot(len(models), lambda s, n: plot_f(s,n, (score_df_tts_nofs, preds_tts_nofs)), n_cols=4)
     fig.suptitle('train test split')
 # CV 
-if 0:
-    fig, axes = min_multiple_plot(len(models), lambda s, n: plot_f(s, n, (score_df_cv, preds_cv)), n_cols=4)
+if 1:
+    fig, axes = min_multiple_plot(len(models_nofs), lambda s, n: plot_f(s, n, (score_df_cv_nofs, preds_cv_nofs, grid_nofs)), n_cols=4)
     fig.suptitle('CV')
 
 
@@ -240,11 +244,7 @@ MAPE and wMAPE justify cross validation.
 regressors_f = [LinearRegression(), Ridge(), Lasso(), PLSRegression(n_components=6)]
 degrees_f = [4,6]
 
-regressors = regressors_f
-degrees= degrees_f
-
-param_grid = {'regressor': regressors,'degree': degrees}
-
+param_grid = {'regressor': regressors_f,'degree': degrees_f}
 grid = ParameterGrid(param_grid)
 
 models_f = [
@@ -271,7 +271,7 @@ score_df_cv_f, preds_df_cv_f = score_preds_cv(X, y, kf, score_df_cv_f, preds_cv_
 # %% Filter feature selection - plots
 # CV 
 if 1:
-    fig, axes = min_multiple_plot(len(models), lambda s, n: plot_f(s, n, (score_df_cv_f, preds_cv_f, grid_f)), n_cols=4)
+    fig, axes = min_multiple_plot(len(models_f), lambda s, n: plot_f(s, n, (score_df_cv_f, preds_cv_f, grid_f)), n_cols=4)
     fig.suptitle('CV')
 #checkboxes
 if 0:
@@ -322,7 +322,7 @@ models_w = [
     for params in grid
 ]
 
-grid_w = ParameterGrid({'model': models})
+grid_w = ParameterGrid({'model': models_w})
 
 
 # %% Wrapper feature selection - CV
@@ -333,7 +333,7 @@ score_df_cv_w, preds_cv_w = score_preds_cv(X, y, kf, score_df_cv_w, preds_cv_w, 
 # %% Wrapper feature selection - plots
 # CV - RFE
 if 1:
-    fig, axes = min_multiple_plot(len(models), lambda s, n: plot_f(s, n, (score_df_cv_w, preds_cv_w, grid_w)), n_cols=None)
+    fig, axes = min_multiple_plot(len(models_w), lambda s, n: plot_f(s, n, (score_df_cv_w, preds_cv_w, grid_w)), n_cols=None)
     fig.suptitle('CV with RFE')
 #checkboxes
 if 0:
@@ -363,3 +363,6 @@ if 0:
 # %% --------------
 # %% show plots
 plt.show()
+# %% clear plots
+plt.close('all')
+# %%
