@@ -57,3 +57,5 @@ df_scaled = df.copy()
 feature_names = [col for col in df.columns if col != 'target']
 df_scaled[feature_names] = x_scaler.fit_transform(df_scaled[feature_names])
 df_scaled['target'] = y_scaler.fit_transform(df_scaled[['target']])
+
+random_state = 42
