@@ -19,13 +19,14 @@ from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, mean_absolute_percentage_error, r2_score
 from sklearn.linear_model import Ridge, Lasso
-from sklearn.model_selection import ParameterGrid   
+from sklearn.model_selection import ParameterGrid  
+from sklearn.model_selection import GridSearchCV 
 
 #%%  
 
 # Dataset
 X = np.load("X_train.npy")
-Y= np.load('Y_train.npy')
+Y= np.load('y_train.npy')
 
 # Plot
 for i in range(6):
@@ -104,42 +105,40 @@ min_val = min(int(np.sqrt(X_train.shape[0])), int(X_train.shape[0]/3))
 max_val = max(int(np.sqrt(X_train.shape[0])), int(X_train.shape[0]/3))
 
 # grids separados: LinearRegression (sem alpha), Ridge/Lasso (com alphas diferentes)
+pipe = Pipeline([
+    ("scaler", StandardScaler()),
+    ("RBS", RBFFeatures(M=10)),      # placeholder M (will be overridden)
+    ("reg", LinearRegression())      # placeholder model (overridden)
+])
+
+# be careful: range(a, b) excludes b — use b+1 if you want inclusive max
 param_grid = [
-    {"M": range(min_val, max_val), "model": [LinearRegression()], "alpha": [None]},
-    {"M": range(min_val, max_val), "model": [Ridge()], "alpha": [0.01, 0.1, 1.0]},
-    {"M": range(min_val, max_val), "model": [Lasso()], "alpha": [0.001, 0.005, 0.01]}
+    # LinearRegression: no alpha
+    {
+        "RBS__M": range(min_val, max_val),   # or range(min_val, max_val+1)
+        "reg": [LinearRegression()],
+        # example LR-specific params if you want:
+        "reg__fit_intercept": [True, False],
+    },
+    # Ridge: tune alpha
+    {
+        "RBS__M": range(min_val, max_val),
+        "reg": [Ridge(max_iter=5000)],
+        "reg__alpha": [0.01, 0.1, 1.0],
+    },
+    # Lasso: tune alpha (set higher max_iter to avoid warnings)
+    {
+        "RBS__M": range(min_val, max_val),
+        "reg": [Lasso(max_iter=10000)],
+        "reg__alpha": [0.001, 0.005, 0.01],
+    }
 ]
 
-for params in ParameterGrid(param_grid):
-    M_val = params["M"]
-    model_instance = params["model"]
-    alpha = params["alpha"]
+grid = GridSearchCV(pipe, param_grid, cv=5, scoring="r2", n_jobs=-1, verbose=2)
+grid.fit(X, Y)
 
-    # só aplica alpha se fizer sentido
-    if alpha is not None:
-        model_instance.set_params(alpha=alpha)
-
-    pipeline = Pipeline([
-        ("scaler", StandardScaler()),
-        ("RBS", RBFFeatures(M=M_val)),
-        ("reg", model_instance)
-    ])
-
-    pipeline.fit(X_train, y_train)
-    y_pred = pipeline.predict(X_val)
-
-    # guarda métricas
-    for name, func in metrics.items():
-        score = func(y_val, y_pred)
-        scores_rbf.append((
-            M_val,
-            type(model_instance).__name__,
-            alpha if alpha is not None else "N/A",  # LinearRegression não tem alpha
-            name,
-            score
-        ))
-
-df_scores = pd.DataFrame(scores_rbf, columns=["n_rbf", "model", "alpha", "metric", "score"])
+print("best score:", grid.best_score_)
+print("best params:", grid.best_params_)
 
 #%% Plotting Results
 
@@ -147,36 +146,25 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 
-fig, axes = plt.subplots(1, len(metric_names), figsize=(18, 5), sharey=False)
+import pandas as pd
 
-for ax, metric in zip(axes, metric_names):
-    subset = df_scores[df_scores["metric"] == metric].copy()
-    
-    # cria coluna combinando modelo + alpha
-    subset["model_alpha"] = subset["model"] + " (alpha=" + subset["alpha"].astype(str) + ")"
-    
-    sns.lineplot(
-        data=subset,
-        x="n_rbf",
-        y="score",
-        hue="model_alpha",
-        ax=ax
-    )
-    
-    ax.set_xlabel("Number of RBFs (M)")
-    ax.set_ylabel(metric)
-    ax.set_title(f"RBF Model Performance: {metric}")
+# Extract results from GridSearchCV
+results = pd.DataFrame(grid.cv_results_)
 
-# remove legend de todos os eixos
-for ax in axes:
-    ax.get_legend().remove()
+# Filter only the RBF M parameter and mean test score
+plt.figure()
+for reg_name in ['LinearRegression', 'Ridge', 'Lasso']:
+    mask = results['param_reg'].apply(lambda x: x.__class__.__name__) == reg_name
+    plt.plot(results.loc[mask, 'param_RBS__M'],
+             results.loc[mask, 'mean_test_score'],
+             label=reg_name)
 
-# cria legenda única abaixo do gráfico
-handles, labels = axes[0].get_legend_handles_labels()
-fig.legend(handles, labels, loc='lower center', ncol=4, frameon=False, bbox_to_anchor=(0.5, -0.25))
-
-plt.tight_layout()
+plt.xlabel("Number of RBF kernels (M)")
+plt.ylabel("Mean CV R2 score")
+plt.title("Performance vs Number of RBF kernels")
+plt.legend()
 plt.show()
+
 
 
 # %%
