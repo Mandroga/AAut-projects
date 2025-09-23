@@ -632,6 +632,7 @@ def bar_plot(df_, y, X=None, label=None, min_multiples=None ,cmap_name='viridis'
     import matplotlib.patches as mpatches
 
     def plot_f_xlmm(subplot, n):
+        print(n)
         n_bars = len(label_unique)
         n_groups = len(X_unique)
         bar_width = 0.1
@@ -655,6 +656,7 @@ def bar_plot(df_, y, X=None, label=None, min_multiples=None ,cmap_name='viridis'
 
             for j, label_i in enumerate(label_unique):
                 value = dfi[dfi[label] == label_i][y].values
+                print(value, xi, mmi, label_i)
                 if len(value) > 1:
                     raise ValueError('Incorrect slicing: more than one value found.')
                 elif len(value) == 0:

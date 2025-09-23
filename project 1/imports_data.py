@@ -31,11 +31,14 @@ from sklearn.feature_selection import RFECV
 from sklearn.model_selection import KFold, cross_val_score
 from sklearn.cross_decomposition import PLSRegression
 from skopt import BayesSearchCV
+from skopt.space import Real, Integer, Categorical
 from sklearn.feature_selection import mutual_info_regression, mutual_info_classif
 from sklearn.feature_selection import VarianceThreshold
 from sklearn.model_selection import ParameterGrid
 from sklearn.base import BaseEstimator, TransformerMixin
 from scipy.stats import trim_mean
+from sklearn.base import BaseEstimator, TransformerMixin, clone
+
 
 # %% import data
 

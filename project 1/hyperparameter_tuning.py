@@ -3,164 +3,10 @@ from turtle import pd
 
 
 %run imports_data.py
-# %% metrics and functions
+# %% metrics
 # ------- Custom winsorized MAPE -------
-def winsorized_mape(y_true, y_pred, q=0.95):
-    errors = np.abs((y_true - y_pred) / y_true)
-    threshold = np.quantile(errors, q)  # cap top q% of errors
-    errors = np.clip(errors, 0, threshold)
-    return errors.mean()
-
-def score_preds_cv(X, y, kf, score_df, preds, grid):
-    for ps in grid:
-        model_name, model = ps['model']
-
-        iter_name = model_name
-        preds[iter_name] = {'train_p':[],'train_t':[],'val_p':[],'val_t':[]}
-        
-        for fold, (train_idx, val_idx) in enumerate(kf.split(X)):
-            X_train, X_val = X[train_idx], X[val_idx]
-            y_train, y_val = y[train_idx], y[val_idx]
-            
-            # Fit and predict
-            model.fit(X_train, y_train)
-            y_pred_train = model.predict(X_train)
-            y_pred_val = model.predict(X_val)
-
-            preds[iter_name]['train_p'].append(y_pred_train)
-            preds[iter_name]['val_p'].append(y_pred_val)
-            preds[iter_name]['train_t'].append(y_train)
-            preds[iter_name]['val_t'].append(y_val)
-
-            # Compute metrics
-            sets = [['train_p', y_train, y_pred_train], ['val_p', y_val, y_pred_val]]
-            for set_name, truth, pred in sets:
-                for i, metric in enumerate(metrics):
-                    score_df.loc[len(score_df)] = [
-                        model_name, metric_names[i], fold+1, set_name, metric(truth, pred)
-                    ]
-
-    # ------- Summary: mean ± std per metric per model -------
-    score_df = score_df.groupby(['model','metric','set']).score.agg(['mean']).reset_index()
-    score_df['score']=score_df['mean']
-    score_df.drop('mean',axis=1,inplace=True)
-    return score_df, preds
-
-def score_preds_tts(X, y, score_df, preds, grid, test_size=0.2):
-    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=test_size, random_state=random_state)
-    for ps in grid:
-        model_name, model = ps['model']
-        iter_name = model_name
-        
-        model.fit(X_train, y_train)
-        y_pred_train = model.predict(X_train)
-        y_pred_val = model.predict(X_val)
-        
-        preds[iter_name] = {'train_p':[],'train_t':[],'val_p':[],'val_t':[]}
-        preds[iter_name]['train_p'].append(y_pred_train)
-        preds[iter_name]['val_p'].append(y_pred_val)
-        preds[iter_name]['train_t'].append(y_train)
-        preds[iter_name]['val_t'].append(y_val)
-        
-        sets = [['train_p',y_train, y_pred_train], ['val_p', y_val, y_pred_val]]
-        for set_name, truth, pred in sets:
-            for i in range(len(metrics)):
-                score_df.loc[len(score_df)] = [model_name, metric_names[i],set_name, metrics[i](truth, pred)]
-    return score_df, preds
-
-def overfit_table(df1, df2, metric_names, df_names=['df1', 'df2']):
-    # Pivot both dfs
-    df1_p = df1.pivot(index=['model', 'metric'], columns='set', values='score')
-    df2_p = df2.pivot(index=['model', 'metric'], columns='set', values='score')
-    
-    # Compute differences
-    df1_diff = df1_p['train_p'] - df1_p['val_p']
-    df2_diff = df2_p['train_p'] - df2_p['val_p']
-    
-    # Put them into a dict
-    d = {df_names[0]: df1_diff, df_names[1]: df2_diff}
-    
-    # Create output DataFrame
-    overfit_df = pd.DataFrame(columns=metric_names, index=df_names)
-    
-    for key, df in d.items():
-        for metric in metric_names:
-            # Select all values for this metric across models
-            vals = df.xs(metric, level='metric')
-            overfit_df.loc[key, metric] = trim_mean(vals, 0.1)
-    
-    return overfit_df
-
-def plot_f(subplot, n, data):
-    score_df_, preds_, grid_ = data
-    model_name, _ = grid_[n]['model']
-    iter_name = model_name
-
-    #scores
-    scores = {}
-    set_names = ['train_p','val_p']
-    used_metric_names = ['MAPE', 'wMAPE', 'R2']
-    for set_name in set_names:
-        scores[set_name] = {}
-        for metric in used_metric_names:
-            scores[set_name][metric] = score_df_.query(f'model == "{model_name}" and set == "{set_name}" and metric == "{metric}"')['score'].iloc[0]
-
-    #ideal
-
-    target = preds_[iter_name]['val_t'] 
-    y = np.concatenate(target)
-    sns.lineplot(x=y, y=y, ax=subplot, color='red')
-    
-    #scatters
-    alphas = {'train_p':0.5,'val_p':1}
-    for set_name in set_names:
-         txt = set_name
-         for metric in used_metric_names:
-             txt += f'\n{metric}: {scores[set_name][metric]:.2f}'
-         x = preds_[iter_name][set_name]
-         target = preds_[iter_name][set_name.replace('_p','_t')] 
-         x = np.concatenate(x)
-         y = np.concatenate(target)
-         sns.scatterplot(x=x, y=y, ax=subplot, label=txt,alpha=alphas[set_name])
-
-  
-    subplot.grid()
-    subplot.legend(loc='upper left', bbox_to_anchor=(1,1), fontsize=10)
-    subplot.set_title(model_name)
-
-
-class DropHighlyCorrelated(BaseEstimator, TransformerMixin):
-    def __init__(self, threshold=0.9):
-        self.threshold = threshold
-        self.to_drop_ = []
-
-    def fit(self, X, y=None):
-        corr_matrix = pd.DataFrame(X).corr().abs()
-        upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
-        self.to_drop_ = [col for col in upper.columns if any(upper[col] > self.threshold)]
-        return self
-
-    def transform(self, X):
-        return pd.DataFrame(X).drop(columns=self.to_drop_, errors='ignore').values
-
-class DropLowTargetCorrelation(BaseEstimator, TransformerMixin):
-    def __init__(self, threshold=0.05):
-        self.threshold = threshold
-        self.features_to_keep_ = None
-
-    def fit(self, X, y):
-        df = pd.DataFrame(X)
-        corr = df.corrwith(pd.Series(y)).abs()
-        self.features_to_keep_ = corr[corr > self.threshold].index
-        return self
-
-    def transform(self, X):
-        return pd.DataFrame(X).iloc[:, self.features_to_keep_].values
-
-
 metrics = [mean_squared_error, mean_absolute_percentage_error, winsorized_mape, r2_score]
 metric_names = ['MSE', 'MAPE', 'wMAPE','R2']
-
 
 # %% -------------
 
@@ -225,7 +71,7 @@ if 0:
 # CV 
 if 1:
     fig, axes = min_multiple_plot(len(models_nofs), lambda s, n: plot_f(s, n, (score_df_cv_nofs, preds_cv_nofs, grid_nofs)), n_cols=4)
-    fig.suptitle('CV')
+    fig.suptitle('CV - No Feature Selection')
 
 
 '''
@@ -272,7 +118,7 @@ score_df_cv_f, preds_df_cv_f = score_preds_cv(X, y, kf, score_df_cv_f, preds_cv_
 # CV 
 if 1:
     fig, axes = min_multiple_plot(len(models_f), lambda s, n: plot_f(s, n, (score_df_cv_f, preds_cv_f, grid_f)), n_cols=4)
-    fig.suptitle('CV')
+    fig.suptitle('CV - Filter Feature Selection')
 #checkboxes
 if 0:
     line_by_label_ = get_line_by_label(axes)
@@ -333,8 +179,8 @@ score_df_cv_w, preds_cv_w = score_preds_cv(X, y, kf, score_df_cv_w, preds_cv_w, 
 # %% Wrapper feature selection - plots
 # CV - RFE
 if 1:
-    fig, axes = min_multiple_plot(len(models_w), lambda s, n: plot_f(s, n, (score_df_cv_w, preds_cv_w, grid_w)), n_cols=None)
-    fig.suptitle('CV with RFE')
+    fig, axes = min_multiple_plot(len(models_w), lambda s, n: plot_f(s, n, (score_df_cv_w, preds_cv_w, grid_w)), n_cols=3)
+    fig.suptitle('CV - RFE Feature Selection')
 #checkboxes
 if 0:
     line_by_label_ = get_line_by_label(axes)
@@ -361,6 +207,77 @@ if 0:
 
 
 # %% --------------
+
+# %% Final training
+ols = LinearRegression()
+ridge = Ridge()
+lasso = Lasso(max_iter=5000)
+pls = PLSRegression()
+
+
+pipe = Pipeline([
+    ("poly", PolynomialFeatures()),
+    ("scaler", StandardScaler()),
+    ("selector", "passthrough"),
+    ("regressor", "passthrough"),
+])
+
+degrees = Integer(1,6)
+rfe_cv_folds = 2
+pls_components = Integer(1,10)
+alpha_space = Real(1e-3, 1e3, prior="log-uniform")
+
+combined_selector = Pipeline([
+    ('high_corr', DropHighlyCorrelated(threshold=0.95)),
+    ("corr_filter", DropLowTargetCorrelation(threshold=0.01)),
+    ("rfe", RFECV(LinearRegression(), cv=KFold(5), scoring="neg_mean_squared_error"))
+])
+
+selectors = [
+    "passthrough",  # no feature selection
+    RFECV(LinearRegression(), cv=KFold(rfe_cv_folds), scoring="neg_mean_squared_error"),
+    combined_selector
+]
+
+search_spaces = [
+    {
+        "poly__degree": degrees,
+        "selector": selectors,
+        "regressor": [ols],
+    }
+]
+search_spaces += [
+    {
+        "poly__degree": degrees,
+        "selector": selectors,
+        "regressor": [model],
+        "regressor__alpha": alpha_space,
+    }
+    for model in [ridge, lasso]
+]
+search_spaces += [
+    {
+        "poly__degree": degrees,
+        "selector": ["passthrough"],  # keep all features
+        "regressor": [PLSRegression()],
+        "regressor__n_components": pls_components,
+    },
+]
+
+# Bayesian search
+opt = BayesSearchCV(
+    estimator=pipe,
+    search_spaces=search_spaces,
+    n_iter=5,  # number of trials (increase for better search)
+    cv=5,
+    scoring="neg_mean_squared_error",
+    n_jobs=-1,
+    verbose=1,
+    random_state=42,
+)
+
+opt.fit(X, y)
+cv_results = pd.DataFrame(opt.cv_results_)
 # %% show plots
 plt.show()
 # %% clear plots
