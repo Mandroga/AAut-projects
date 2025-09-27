@@ -33,11 +33,17 @@ poly_scaler = StandardScaler()
 X_sps = pd.DataFrame(poly_scaler.fit_transform(X_scaled_poly), columns=X_scaled_poly.columns)
 
 # %% PCA and CovMatrix original features
-plot_PCA(df, ['target'])
-plot_PCA(df.drop(['3'], axis=1), ['target'])
-plot_PCA(df.drop(['3','5'], axis=1), ['target'])
-plot_PCA(df.drop(['1','3','5'], axis=1), ['target'])
-plot_covmatrix(df)
+if 0:
+    plot_PCA(df, ['target'])
+    plot_PCA(df.drop(['3'], axis=1), ['target'])
+    plot_PCA(df.drop(['3','5'], axis=1), ['target'])
+    plot_PCA(df.drop(['1','3','5'], axis=1), ['target'])
+    plot_covmatrix(df)
+
+poly = PolynomialFeatures(degree=4, include_bias=False)
+
+X_poly = pd.DataFrame(poly.fit_transform(X_df))
+plot_PCA(X_poly)
 
 #Testing Poly Features -- (is this useful?)
 if 0:

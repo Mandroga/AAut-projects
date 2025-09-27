@@ -2,11 +2,8 @@
 from turtle import pd
 
 
+
 %run imports_data.py
-# %% metrics
-# ------- Custom winsorized MAPE -------
-metrics = [mean_squared_error, mean_absolute_percentage_error, winsorized_mape, r2_score]
-metric_names = ['MSE', 'MAPE', 'wMAPE','R2']
 
 # %% -------------
 
@@ -54,10 +51,7 @@ score_df_tts_nofs, preds_tts_nofs = score_preds_tts(X, y, score_df_tts_nofs, pre
 '''
 Fitting with no feature selection
 '''
-preds_cv_nofs = {}
-score_df_cv_nofs = pd.DataFrame(columns=['model','metric','fold','set','score'])
-kf = KFold(n_splits=5, shuffle=True, random_state=42)
-score_df_cv_nofs, preds_cv_nofs = score_preds_cv(X, y, kf, score_df_cv_nofs, preds_cv_nofs, grid_nofs)
+score_df_cv_nofs, preds_cv_nofs = score_preds_grid_cv(X, y, kf, grid_nofs, n_splits=5)
 
 
 # %% No feature selection - plots
@@ -109,10 +103,7 @@ models_f = [
 grid_f = ParameterGrid({'model': models_f})
 
 # %% Filter feature selection - CV
-preds_cv_f = {}
-score_df_cv_f = pd.DataFrame(columns=['model','metric','fold','set','score'])
-kf = KFold(n_splits=2, shuffle=True, random_state=42)
-score_df_cv_f, preds_df_cv_f = score_preds_cv(X, y, kf, score_df_cv_f, preds_cv_f, grid_f)
+score_df_cv_f, preds_df_cv_f = score_preds_grid_cv(X, y, kf, grid_f, n_splits=5)
 
 # %% Filter feature selection - plots
 # CV 
@@ -172,10 +163,7 @@ grid_w = ParameterGrid({'model': models_w})
 
 
 # %% Wrapper feature selection - CV
-preds_cv_w = {}
-score_df_cv_w = pd.DataFrame(columns=['model','metric','fold','set','score'])
-kf = KFold(n_splits=5, shuffle=True, random_state=42)
-score_df_cv_w, preds_cv_w = score_preds_cv(X, y, kf, score_df_cv_w, preds_cv_w, grid_w)
+score_df_cv_w, preds_cv_w = score_preds_grid_cv(X, y, kf, grid_w, n_splits=5)
 # %% Wrapper feature selection - plots
 # CV - RFE
 if 1:
@@ -209,57 +197,89 @@ if 0:
 # %% --------------
 
 # %% Final training
+
+class EstimatorWrapper(BaseEstimator, TransformerMixin):
+    """Make any estimator appear as a single, non-iterable object to skopt/NumPy."""
+    def __init__(self, estimator):
+        self.estimator = estimator
+
+    def fit(self, X, y=None):
+        self.estimator_ = clone(self.estimator)
+        self.estimator_.fit(X, y)
+        return self
+
+    def transform(self, X):
+        return self.estimator_.transform(X)
+
+    # keep it sklearn-friendly
+    def get_params(self, deep=True):
+        return {"estimator": self.estimator}
+
+    def set_params(self, **params):
+        if "estimator" in params:
+            self.estimator = params["estimator"]
+        return self
+    
+
 ols = LinearRegression()
 ridge = Ridge()
 lasso = Lasso(max_iter=5000)
 pls = PLSRegression()
 
-
 pipe = Pipeline([
-    ("poly", PolynomialFeatures()),
+    ("poly", PolynomialFeatures(include_bias=False)),
     ("scaler", StandardScaler()),
     ("selector", "passthrough"),
     ("regressor", "passthrough"),
 ])
 
-degrees = Integer(1,6)
-rfe_cv_folds = 2
-pls_components = Integer(1,10)
+degrees = Integer(2,6)
+rfe_cv_folds = 5
+bayes_cv = 5
+n_iter = 50
+pls_components = Integer(1,20)
 alpha_space = Real(1e-3, 1e3, prior="log-uniform")
 
 combined_selector = Pipeline([
     ('high_corr', DropHighlyCorrelated(threshold=0.95)),
     ("corr_filter", DropLowTargetCorrelation(threshold=0.01)),
-    ("rfe", RFECV(LinearRegression(), cv=KFold(5), scoring="neg_mean_squared_error"))
+    ("rfe", RFECV(LinearRegression(), cv=KFold(rfe_cv_folds), scoring="neg_mean_squared_error"))
 ])
 
-selectors = [
-    "passthrough",  # no feature selection
+combined_selector2 = Pipeline([
+    ('pca', PCA(n_components=0.99)),
+    ("rfe", RFECV(LinearRegression(), cv=KFold(rfe_cv_folds), scoring="neg_mean_squared_error"))
+])
+
+selectors = Categorical([
+    #"passthrough",  # no feature selection
     RFECV(LinearRegression(), cv=KFold(rfe_cv_folds), scoring="neg_mean_squared_error"),
-    combined_selector
-]
+    #EstimatorWrapper(combined_selector),
+    combined_selector2,
+     PCA(n_components=0.99)
+])
 
 search_spaces = [
     {
         "poly__degree": degrees,
         "selector": selectors,
-        "regressor": [ols],
+        "regressor": Categorical([ols]),
     }
 ]
 search_spaces += [
     {
         "poly__degree": degrees,
         "selector": selectors,
-        "regressor": [model],
+        "regressor": Categorical([ridge, lasso]),
         "regressor__alpha": alpha_space,
     }
-    for model in [ridge, lasso]
+
 ]
-search_spaces += [
+search_spaces_pls = [
     {
         "poly__degree": degrees,
-        "selector": ["passthrough"],  # keep all features
-        "regressor": [PLSRegression()],
+        "selector": Categorical(["passthrough"]),  # keep all features
+        "regressor": Categorical([PLSRegression()]),
         "regressor__n_components": pls_components,
     },
 ]
@@ -268,16 +288,119 @@ search_spaces += [
 opt = BayesSearchCV(
     estimator=pipe,
     search_spaces=search_spaces,
-    n_iter=5,  # number of trials (increase for better search)
-    cv=5,
+    n_iter=n_iter,  # number of trials (increase for better search)
+    cv=bayes_cv,
     scoring="neg_mean_squared_error",
     n_jobs=-1,
     verbose=1,
-    random_state=42,
+    random_state=RANDOM_STATE,
 )
 
 opt.fit(X, y)
 cv_results = pd.DataFrame(opt.cv_results_)
+best_model = opt.best_estimator_
+# %% Final search results
+pd.set_option('display.max_rows', None)
+pd.set_option('display.max_columns', None)
+pd.set_option('display.max_colwidth', None)
+pd.set_option('display.width', None)          # don't wrap to the console width
+pd.set_option('display.expand_frame_repr', False)
+#save to df
+if 0:
+    cv_results.sort_values(by='mean_test_score', ascending=False, inplace=True)
+    try:
+        #cv_results.to_csv('cv_results.csv', index=False)
+        cv_results.to_csv('cv_results2.csv', index=False)
+    except Exception as error:
+        pass
+#save model
+if 0:
+    #joblib.dump(best_model, 'best_model.pkl')
+    joblib.dump(best_model, 'best_model2.pkl')
+
+#load df
+if 1:
+    cv_results = pd.read_csv('cv_results.csv')
+    print(cv_results)
+#load model
+if 1:
+    best_model = joblib.load('best_model.pkl')
+
+score_df_final, preds_final = score_preds_cv(X, y, ('Best Model', best_model), n_splits=5)
+print(score_df_final)
+if 1:
+    #bar_plot(score_df_final, y='score', label='set', min_multiples='metric')
+    fig, axes = plt.subplots(1,1)
+    axes.scatter(np.concatenate(preds_final['Best Model']['val_p']), np.concatenate(preds_final['Best Model']['val_t']), label='Val', alpha=0.7)
+    axes.plot(np.concatenate(preds_final['Best Model']['val_t']), np.concatenate(preds_final['Best Model']['val_t']), alpha=0.7,)
+    axes.scatter(np.concatenate(preds_final['Best Model']['train_p']), np.concatenate(preds_final['Best Model']['train_t']), label='Train', alpha=0.7)
+    line_by_label_ = get_line_by_label(axes)
+    line_by_label = line_by_label_filter(line_by_label_, ['Train','Val'])
+    line_by_label['ideal'] = line_by_label_['_child1']
+    axes.grid(True)
+    axes.set_title('Best Model Predictions vs True')
+    add_checkbox(line_by_label)
+
+
+# %% XGBoost
+
+xgb = XGBRegressor(
+    objective="reg:squarederror",
+    tree_method="hist",   # fast histogram-based algo
+    random_state=42
+)
+
+# Search space
+search_spaces = {
+    "n_estimators": Integer(100, 1000),
+    "max_depth": Integer(3, 20),
+    "learning_rate": Real(0.01, 0.3, prior="log-uniform"),
+    "subsample": Real(0.5, 1.0),
+    "colsample_bytree": Real(0.5, 1.0),
+    "gamma": Real(0.0, 5.0),
+    "reg_alpha": Real(1e-8, 10.0, prior="log-uniform"),  # L1
+    "reg_lambda": Real(1e-8, 10.0, prior="log-uniform"), # L2
+    "min_child_weight": Integer(1, 20),
+    "booster": Categorical(["gbtree", "dart"])
+}
+
+# CV setup for regression
+cv = KFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
+
+# Bayesian CV optimizer
+opt = BayesSearchCV(
+    estimator=xgb,
+    search_spaces=search_spaces,
+    n_iter=10,             # number of trials
+    cv=cv,
+    n_jobs=4,
+    scoring="neg_root_mean_squared_error",  # RMSE (lower is better)
+    verbose=1,
+    random_state=RANDOM_STATE
+)
+
+# Run optimization
+opt.fit(X, y)
+
+xgb_cv_results = pd.DataFrame(opt.cv_results_)
+xgb_best_model = opt.best_estimator_
+
+# %% xgb results
+score_df_final, preds_final = score_preds_cv(X, y, ('Best Model', xgb_best_model), n_splits=5)
+print(score_df_final)
+if 1:
+    #bar_plot(score_df_final, y='score', label='set', min_multiples='metric')
+    fig, axes = plt.subplots(1,1)
+    axes.scatter(np.concatenate(preds_final['Best Model']['val_p']), np.concatenate(preds_final['Best Model']['val_t']), label='Val', alpha=0.7)
+    axes.plot(np.concatenate(preds_final['Best Model']['val_t']), np.concatenate(preds_final['Best Model']['val_t']), alpha=0.7,)
+    axes.scatter(np.concatenate(preds_final['Best Model']['train_p']), np.concatenate(preds_final['Best Model']['train_t']), label='Train', alpha=0.7)
+    line_by_label_ = get_line_by_label(axes)
+    line_by_label = line_by_label_filter(line_by_label_, ['Train','Val'])
+    line_by_label['ideal'] = line_by_label_['_child1']
+    axes.grid(True)
+    axes.set_title('Best Model Predictions vs True')
+    add_checkbox(line_by_label)
+
 # %% show plots
 plt.show()
 # %% clear plots

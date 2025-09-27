@@ -841,7 +841,8 @@ def bar_plot(df_, y, X=None, label=None, min_multiples=None ,cmap_name='viridis'
 # Checkboxes get plotted objects (lines and scatters) to labels
 def get_line_by_label(axes):
     line_by_label = {}
-    for subplot in axes.flatten():
+    axes_flatten = axes.flatten() if isinstance(axes, np.ndarray) else [axes]
+    for subplot in axes_flatten:
         for line in subplot.get_lines():
             label = line.get_label()
             if line_by_label.get(label, None) == None: line_by_label[label] = []

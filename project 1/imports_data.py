@@ -38,6 +38,10 @@ from sklearn.model_selection import ParameterGrid
 from sklearn.base import BaseEstimator, TransformerMixin
 from scipy.stats import trim_mean
 from sklearn.base import BaseEstimator, TransformerMixin, clone
+import joblib
+from sklearn.decomposition import PCA
+from xgboost import XGBRegressor
+
 
 
 # %% import data
@@ -61,7 +65,8 @@ feature_names = [col for col in df.columns if col != 'target']
 df_scaled[feature_names] = x_scaler.fit_transform(df_scaled[feature_names])
 df_scaled['target'] = y_scaler.fit_transform(df_scaled[['target']])
 
-random_state = 42
+RANDOM_STATE = 42
+
 
 # %% Useful functions
 
@@ -71,7 +76,47 @@ def winsorized_mape(y_true, y_pred, q=0.95):
     errors = np.clip(errors, 0, threshold)
     return errors.mean()
 
-def score_preds_cv(X, y, kf, score_df, preds, grid):
+def score_preds_cv(X, y, model_tup, n_splits=5):
+    score_df = pd.DataFrame(columns=['model','metric','fold','set','score'])
+    preds = {}
+    kf = KFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE)
+
+    model_name, model = model_tup
+    iter_name = model_name
+    preds[iter_name] = {'train_p':[],'train_t':[],'val_p':[],'val_t':[]}
+    
+    for fold, (train_idx, val_idx) in enumerate(kf.split(X)):
+        X_train, X_val = X[train_idx], X[val_idx]
+        y_train, y_val = y[train_idx], y[val_idx]
+        
+        # Fit and predict
+        model.fit(X_train, y_train)
+        y_pred_train = model.predict(X_train)
+        y_pred_val = model.predict(X_val)
+
+        preds[iter_name]['train_p'].append(y_pred_train)
+        preds[iter_name]['val_p'].append(y_pred_val)
+        preds[iter_name]['train_t'].append(y_train)
+        preds[iter_name]['val_t'].append(y_val)
+
+        # Compute metrics
+        sets = [['train_p', y_train, y_pred_train], ['val_p', y_val, y_pred_val]]
+        for set_name, truth, pred in sets:
+            for i, metric in enumerate(metrics):
+                score_df.loc[len(score_df)] = [
+                    model_name, metric_names[i], fold+1, set_name, metric(truth, pred)
+                ]
+
+    # ------- Summary: mean ± std per metric per model -------
+    score_df = score_df.groupby(['model','metric','set']).score.agg(['mean']).reset_index()
+    score_df['score']=score_df['mean']
+    score_df.drop('mean',axis=1,inplace=True)
+    return score_df, preds
+
+def score_preds_grid_cv(X, y, grid, n_splits=5):
+    score_df = pd.DataFrame(columns=['model','metric','fold','set','score'])
+    preds = {}
+    kf = KFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE)
     for ps in grid:
         model_name, model = ps['model']
 
@@ -106,8 +151,8 @@ def score_preds_cv(X, y, kf, score_df, preds, grid):
     score_df.drop('mean',axis=1,inplace=True)
     return score_df, preds
 
-def score_preds_tts(X, y, score_df, preds, grid, test_size=0.2):
-    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=test_size, random_state=random_state)
+def score_preds_grid_tts(X, y, score_df, preds, grid, test_size=0.2):
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=test_size, random_state=RANDOM_STATE)
     for ps in grid:
         model_name, model = ps['model']
         iter_name = model_name
@@ -216,3 +261,11 @@ class DropLowTargetCorrelation(BaseEstimator, TransformerMixin):
 
     def transform(self, X):
         return pd.DataFrame(X).iloc[:, self.features_to_keep_].values
+
+# %% metrics
+# ------- Custom winsorized MAPE -------
+metrics = [mean_squared_error, mean_absolute_percentage_error, winsorized_mape, r2_score]
+metric_names = ['MSE', 'MAPE', 'wMAPE','R2']
+
+
+# %%
