@@ -198,29 +198,6 @@ if 0:
 
 # %% Final training
 
-class EstimatorWrapper(BaseEstimator, TransformerMixin):
-    """Make any estimator appear as a single, non-iterable object to skopt/NumPy."""
-    def __init__(self, estimator):
-        self.estimator = estimator
-
-    def fit(self, X, y=None):
-        self.estimator_ = clone(self.estimator)
-        self.estimator_.fit(X, y)
-        return self
-
-    def transform(self, X):
-        return self.estimator_.transform(X)
-
-    # keep it sklearn-friendly
-    def get_params(self, deep=True):
-        return {"estimator": self.estimator}
-
-    def set_params(self, **params):
-        if "estimator" in params:
-            self.estimator = params["estimator"]
-        return self
-    
-
 ols = LinearRegression()
 ridge = Ridge()
 lasso = Lasso(max_iter=5000)
@@ -233,7 +210,7 @@ pipe = Pipeline([
     ("regressor", "passthrough"),
 ])
 
-degrees = Integer(2,6)
+degrees = Integer(4,8)
 rfe_cv_folds = 5
 bayes_cv = 5
 n_iter = 50
@@ -341,7 +318,128 @@ if 1:
     axes.set_title('Best Model Predictions vs True')
     add_checkbox(line_by_label)
 
+# %% REALLY Final
+rfe_cv_folds = 5
+pca_variance = Real(0.9,0.99)
+bayes_cv     = 5
+n_iter       = 50
 
+alpha_space = Real(1e-3, 1e3, prior="log-uniform")
+degrees     = Integer(4, 8)
+
+# ---------- Isolation Forest sampler ----------
+
+sampler = FunctionSampler(func=iforest_filter, validate=False)
+
+# ---------------- RegressorSwitcher ----------------
+
+class Ridge_RFECV(BaseEstimator, TransformerMixin):
+    '''
+    Ridge_RFECV loads BayesCV alpha in order
+    '''
+    def __init__(self, cv=5):
+        self.cv = cv
+        self.rfe_ = None
+
+    def fit(self, X, y):
+        ridge = Ridge()
+        self.rfe_ = RFECV(estimator=ridge, step=0.1, cv=self.cv, scoring='r2')
+        self.rfe_.fit(X, y)
+        return self
+
+    def transform(self, X):
+        if self.rfe_ is None:
+            raise RuntimeError("You must fit the transformer before transforming data!")
+        return self.rfe_.transform(X)
+
+    def get_support(self):
+        if self.rfe_ is None:
+            raise RuntimeError("You must fit the transformer before getting support!")
+        return self.rfe_.get_support()
+    
+
+pipe = ImbPipeline([
+    ('sampler', sampler),
+    ('poly', PolynomialFeatures(include_bias=False)),
+    ('scale', StandardScaler()),
+    ('pca', PCA()),  # escolhido via variância
+    ('RFE', RFECV(Ridge(), cv=KFold(rfe_cv_folds), scoring="r2")),  # sempre aplicado
+    ('regressor', Ridge())
+])
+
+search_spaces = [
+    {
+        "poly__degree": degrees,
+        "pca__n_components": pca_variance,  # Real(0.9, 0.99)
+
+        "regressor_switcher__model": Categorical(['ols','ridge','lasso']),
+        "regressor_switcher__alpha": alpha_space,
+
+    }
+]
+
+opt = BayesSearchCV(
+    estimator=pipe,
+    search_spaces=search_spaces,
+    n_iter=n_iter,
+    cv=bayes_cv,
+    scoring="r2",      # <- usar 'r2', não 'r2_score'
+    n_jobs=-1,
+    verbose=1,
+    random_state=RANDOM_STATE,
+)
+
+
+opt.fit(X, y)
+
+cv_results  = pd.DataFrame(opt.cv_results_)
+best_model  = opt.best_estimator_
+best_params = opt.best_params_
+best_score  = -opt.best_score_
+print(best_params)
+print(best_score)
+print(best_model)
+
+# %% REALLY Final results
+pd.set_option('display.max_rows', None)
+pd.set_option('display.max_columns', None)
+pd.set_option('display.max_colwidth', None)
+pd.set_option('display.width', None)          # don't wrap to the console width
+pd.set_option('display.expand_frame_repr', False)
+#save to df
+if 1:
+    cv_results.sort_values(by='mean_test_score', ascending=False, inplace=True)
+    try:
+        #cv_results.to_csv('cv_results.csv', index=False)
+        cv_results.to_csv('cv_results_final.csv', index=False)
+    except Exception as error:
+        pass
+#save model
+if 1:
+    joblib.dump(best_model, 'best_model_final.pkl')
+
+#load df
+if 0:
+    cv_results = pd.read_csv('cv_results_final.csv')
+    print(cv_results)
+#load model
+if 0:
+    best_model = joblib.load('best_model_final.pkl')
+
+score_df_final, preds_final = score_preds_cv(X, y, ('Best Model', best_model), n_splits=5)
+print(score_df_final)
+if 1:
+    #bar_plot(score_df_final, y='score', label='set', min_multiples='metric')
+    fig, axes = plt.subplots(1,1)
+    axes.scatter(np.concatenate(preds_final['Best Model']['val_p']), np.concatenate(preds_final['Best Model']['val_t']), label='Val', alpha=0.7)
+    axes.plot(np.concatenate(preds_final['Best Model']['val_t']), np.concatenate(preds_final['Best Model']['val_t']), alpha=0.7,)
+    axes.scatter(np.concatenate(preds_final['Best Model']['train_p']), np.concatenate(preds_final['Best Model']['train_t']), label='Train', alpha=0.7)
+    line_by_label_ = get_line_by_label(axes)
+    line_by_label = line_by_label_filter(line_by_label_, ['Train','Val'])
+    line_by_label['ideal'] = line_by_label_['_child1']
+    axes.grid(True)
+    axes.set_title('Best Model Predictions vs True')
+    add_checkbox(line_by_label)
 # %% XGBoost
 
 xgb = XGBRegressor(

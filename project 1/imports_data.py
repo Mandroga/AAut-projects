@@ -41,7 +41,11 @@ from sklearn.base import BaseEstimator, TransformerMixin, clone
 import joblib
 from sklearn.decomposition import PCA
 from xgboost import XGBRegressor
-
+from sklearn.ensemble import IsolationForest
+from imblearn.pipeline import Pipeline as ImbPipeline
+from imblearn import FunctionSampler
+from functools import partial
+from sklearn.pipeline import Pipeline as SkPipeline
 
 
 # %% import data
@@ -233,6 +237,14 @@ def plot_f(subplot, n, data):
     subplot.legend(loc='upper left', bbox_to_anchor=(1,1), fontsize=10)
     subplot.set_title(model_name)
 
+def iforest_filter(X, y):
+    iso = IsolationForest(random_state=RANDOM_STATE, contamination='auto')
+    X_arr = X.values if hasattr(X, "values") else np.asarray(X)
+    y_arr = y.values if hasattr(y, "values") else np.asarray(y)
+    mask = iso.fit_predict(X_arr) == 1
+    print(f"[IsolationForest] before={X_arr.shape[0]} after={int(mask.sum())} dropped={int((~mask).sum())}")
+    return X_arr[mask], y_arr[mask]
+
 
 class DropHighlyCorrelated(BaseEstimator, TransformerMixin):
     def __init__(self, threshold=0.9):
@@ -262,6 +274,44 @@ class DropLowTargetCorrelation(BaseEstimator, TransformerMixin):
     def transform(self, X):
         return pd.DataFrame(X).iloc[:, self.features_to_keep_].values
 
+class EstimatorWrapper(BaseEstimator, TransformerMixin):
+    """Make any estimator appear as a single, non-iterable object to skopt/NumPy."""
+    def __init__(self, estimator):
+        self.estimator = estimator
+
+    def fit(self, X, y=None):
+        self.estimator_ = clone(self.estimator)
+        self.estimator_.fit(X, y)
+        return self
+
+    def transform(self, X):
+        return self.estimator_.transform(X)
+
+    # keep it sklearn-friendly
+    def get_params(self, deep=True):
+        return {"estimator": self.estimator}
+
+    def set_params(self, **params):
+        if "estimator" in params:
+            self.estimator = params["estimator"]
+        return self
+    
+class DataSizeLogger(BaseEstimator, TransformerMixin):
+    def __init__(self): self.logs_ = []
+    def fit(self, X, y=None): return self
+    def transform(self, X):
+        msg = f"[DataSizeLogger] Samples: {X.shape[0]}, Features: {X.shape[1]}"
+        self.logs_.append(msg)
+        print(msg)  # shows when n_jobs=1
+        return X
+
+class FeatureLogger(BaseEstimator, TransformerMixin):
+    def fit(self, X, y=None):
+        self.n_features_in_ = X.shape[1]
+        return self
+    def transform(self, X):
+        print(f"[FeatureLogger] Input features: {self.n_features_in_}, Output features: {X.shape[1]}")
+        return X
 # %% metrics
 # ------- Custom winsorized MAPE -------
 metrics = [mean_squared_error, mean_absolute_percentage_error, winsorized_mape, r2_score]
