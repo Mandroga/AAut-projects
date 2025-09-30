@@ -80,3 +80,34 @@ for i in range(140, 600, 40):
     print("best score CV:", grid_fs.best_score_, "size:", i)
     best_centroids.append(grid_fs.best_estimator_)
 # %%
+print(best_centroids)
+# %%
+M_values = [pipe.named_steps['RBS'].M for pipe in best_centroids]
+print(M_values)
+# %%
+data = [i for i in range(140, 600, 40)]
+print(data)
+#%%
+coeffs = np.polyfit(data, M_values, deg=1)  
+y_final= np.polyval(coeffs, 700)
+print(y_final)
+# %%
+# Evaluate the polynomial for plotting
+data_fit = np.linspace(min(data), max(data), 200)
+M_fit = np.polyval(coeffs, data_fit)
+
+# Plot
+plt.scatter(data, M_values, label="Observed best M")
+plt.plot(data_fit, M_fit, color="red", label=f"Degree {degree} fit")
+plt.xlabel("Training set size")
+plt.ylabel("Best M")
+plt.title("Polynomial fit: Best M vs Training size")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# Example: predict best M for a new training size
+new_size = 700
+predicted_M = np.polyval(coeffs, new_size)
+print(f"Predicted best M for training size {new_size}: {predicted_M:.1f}")
+# %%

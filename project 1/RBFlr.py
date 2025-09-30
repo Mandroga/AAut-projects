@@ -15,36 +15,10 @@ time = datetime.datetime.now()
 X = np.load("X_train.npy")
 Y= np.load('y_train.npy')
 
-#%% Definition of RBF class (a built in was not found in sklearn)                   
-class RBFFeatures(BaseEstimator, TransformerMixin):
-    def __init__(self, sigma=1.0, M=5):
-        self.sigma = sigma
-        self.M = M
-        self.centroids = None
-
-    def fit(self, X, y=None):
-        kmeans = KMeans(n_clusters=self.M, random_state=42)
-        kmeans.fit(np.array(X))
-        self.centroids = kmeans.cluster_centers_  # shape: (M, N_features)
-        if self.sigma is None:
-            # Computing the spread (sigma) as the average distance between centroids
-            if self.M > 1:
-                dists = np.linalg.norm(self.centroids[:, np.newaxis] - self.centroids, axis=2)
-                self.sigma = np.mean(dists[dists != 0])  # Avoid zero distance to itself
-            else:
-                self.sigma = 1.0  # Arbitrary value when there's only one centroid
-        return self
-
-    def transform(self, X):
-        N = X.shape[0]
-        M = self.centroids.shape[0]
-        Phi = np.zeros((N, M))
-        diffs = X[:, np.newaxis, :] - self.centroids[np.newaxis, :, :]
-        Phi = np.exp(-np.sum(diffs**2, axis=2) / (2 * self.sigma**2))
-        return Phi
-
+#%% Definition of RBF class (a built in was not found in sklearn), and feature selector in separate file, so it loads correctly to validate_test_code.py                   
+from classes import RBFFeatures, DropHighlyCorrelated, DropLowTargetCorrelation
  #%% Hyperparameter Tuning and Model Evaluation
-"""COMMENT HERE"""
+
 cv=2
 factor= (cv-1)/cv
 min_n_cent = min(int(np.sqrt(X.shape[0]*factor)), int(X.shape[0]*factor))
@@ -156,8 +130,8 @@ pipe_lasso_fs = Pipeline([
 ])    
 
 param_grid_lasso = {
-    'RBF__M': range(min_n_cent, 1000),
-    'lasso__alpha': [1e-4,1e-3, 1e-1, 1]
+    'RBF__M': range(min_n_cent, max_n_cent),
+    'lasso__alpha': [1e-2, 1e-1, 1]
 }
 
 #%%
@@ -306,5 +280,43 @@ def plot_score_train_test_vs_rbfs(grid, model_type, figsize=(14, 8), save_path=N
 #%%
 for i in ['LinearRegression', 'Ridge', 'SVR', 'PLSRegression']:
     plot_score_train_test_vs_rbfs(grid_fs, i)  
+
+# %%
+
+param_grid_final = [
+    {
+        "RBS__M": range(min_n_cent, max_n_cent),   # or range(min_n_cent, max_n_cent+1)
+        "reg": [LinearRegression()],
+        "reg__fit_intercept": [True, False],
+    }]
+
+grid_final = GridSearchCV(pipe_fs, param_grid_final, cv=10, scoring="r2", n_jobs=-1, verbose=2, return_train_score=True)
+grid_final.fit(X, Y)
+
+print("best score CV final:", grid_final.best_score_)
+print("best params:", grid_final.best_params_)
+# %% Train with all data
+
+if __name__ == "__main__":
+    X = np.load("X_train.npy")
+    Y = np.load("y_train.npy")
+    
+"""Best number of centroids is 263 (although we verified this number scales (increases) 
+with the size of the training dataset, we decided not to risk an extrapolation) """
+pipe_final = Pipeline([
+    ("scaler", RobustScaler()),
+    ("RBS", RBFFeatures(M=263)), 
+    ('drop_corr', DropHighlyCorrelated(threshold=0.99)),
+    ('drop_low_target', DropLowTargetCorrelation(threshold=0.01)),     
+    ("reg", LinearRegression())     
+])
+
+pipe_final.fit(X,Y)
+#%%
+pipe_final.score(X,Y)
+#%%
+import pickle
+with open("our_best_model.pkl", "wb") as f:
+    pickle.dump(pipe_final, f)
 
 # %%

@@ -1,6 +1,8 @@
 #%%
 %run imports_data.py
+
 time = datetime.datetime.now()
+
 #%%
 %matplotlib inline
 
@@ -69,16 +71,24 @@ class RBFFeatures(BaseEstimator, TransformerMixin):
         return Phi
 
  #%% Hyperparameter Tuning and Model Evaluation
-
-
-min_val = min(int(np.sqrt(X.shape[0]*0.7)), int(X.shape[0]*0.7))
-max_val = max(int(np.sqrt(X.shape[0])), int(X.shape[0]))
+cv=3
+factor= (cv-1)/cv
+min_val = min(int(np.sqrt(X.shape[0]*factor)), int(X.shape[0]*factor))
+max_val = max(int(np.sqrt(X.shape[0]*factor)), int(X.shape[0]*factor))
 rfe_cv_folds = 5
+print(min_val, max_val)
 
 pipe = Pipeline([
     ("scaler", RobustScaler()),
-  
     ("RBS", RBFFeatures(M=10)),      # placeholder M (overridden)
+    ("reg", LinearRegression())      # placeholder model (overridden)
+])
+
+pipefs = Pipeline([
+    ("scaler", RobustScaler()),
+    ("RBS", RBFFeatures(M=10)), 
+    ('drop_corr', DropHighlyCorrelated(threshold=0.99)),
+    ('drop_low_target', DropLowTargetCorrelation(threshold=0.01)),     # placeholder M (will be overridden)
     ("reg", LinearRegression())      # placeholder model (overridden)
 ])
 
@@ -99,13 +109,7 @@ pipe_pca_rfe = Pipeline([
     ("reg", LinearRegression())
 ])
 
-pipefs = Pipeline([
-    ("scaler", RobustScaler()),
-    ("RBS", RBFFeatures(M=10)), 
-    ('drop_corr', DropHighlyCorrelated(threshold=0.99)),
-    ('drop_low_target', DropLowTargetCorrelation(threshold=0.01)),     # placeholder M (will be overridden)
-    ("reg", LinearRegression())      # placeholder model (overridden)
-])
+
 """
 pipe_fs_rfe = Pipeline([
     ("scaler", RobustScaler()),
@@ -116,21 +120,20 @@ pipe_fs_rfe = Pipeline([
     ("reg", LinearRegression())      # placeholder model (overridden)
 ])
 """
-max_val = min(max_val, 300)  # limit max M to 30 for computational reasons
-# be careful: range(a, b) excludes b — use b+1 if you want inclusive max
+#mx_val = min(max_val, 300)  # limit max M to 30 for computational reasons
+
 param_grid = [
     # LinearRegression: no alpha
     {
         "RBS__M": range(min_val, max_val),   # or range(min_val, max_val+1)
         "reg": [LinearRegression()],
-        # example LR-specific params if you want:
         "reg__fit_intercept": [True, False],
     },
     # Ridge: tune alpha
     {
         "RBS__M": range(min_val, max_val),
         "reg": [Ridge(max_iter=5000)],
-        "reg__alpha": [0.01, 0.1, 1.0],
+        "reg__alpha": [0.001,0.005,0.01],
     },
     #PLS
     {
@@ -142,7 +145,7 @@ param_grid = [
     {
         "RBS__M": range(min_val, max_val),
         "reg": [SVR()],
-        "reg__C": [0.1, 1.0, 10.0],
+        "reg__C": [10.0,12.0,14.0],
         "reg__kernel": ['rbf', 'linear']
     }
 ]
@@ -155,7 +158,7 @@ param_grid_pca = [
         "RBS__M": range(min_val, max_val),
         "reg": [LinearRegression()],
         "reg__fit_intercept": [True, False],
-        "reduce_dims__n_components": [5, 15, 0.95]  # can be int or float for explained variance
+        "reduce_dims__n_components": [5, 15, 0.95]  
     },
     # Ridge
     {
@@ -187,6 +190,7 @@ param_grid_pca_rfe = [
     {
         "RBS__M": range(min_val, max_val),
         "reg": [LinearRegression()],
+        "reg__fit_intercept": [True, False],
         "reduce_dims__n_components": [5, 15, 0.95],
         'rfe__n_features_to_select': [3, 5, 7, 10],
     },
@@ -195,14 +199,6 @@ param_grid_pca_rfe = [
         "RBS__M": range(min_val, max_val),
         "reg": [Ridge(max_iter=5000)],
         "reg__alpha": [0.01, 0.1, 1.0],
-        "reduce_dims__n_components": [5, 15, 0.95],
-        "rfe__n_features_to_select": [5, 10, 15]
-    },
-    # PLS
-    {
-        "RBS__M": range(min_val, max_val),
-        "reg": [PLSRegression(max_iter=5000)],
-        "reg__n_components": range(2, min(10, X.shape[1])),
         "reduce_dims__n_components": [5, 15, 0.95],
         "rfe__n_features_to_select": [5, 10, 15]
     },
@@ -293,7 +289,7 @@ param_space_pca_rfe = [
         "RBS__M": Integer(min_val, max_val),
         "reg": Categorical([LinearRegression()]),
         "reg__fit_intercept": Categorical([True, False]),
-        "reduce_dims__n_components": Categorical([5, 15, 0.95]),
+        "reduce_dims__n_components": Categorical([2, 0.95]),
         "rfe__n_features_to_select": Integer(5, 15)
     },
     # Ridge
@@ -301,15 +297,7 @@ param_space_pca_rfe = [
         "RBS__M": Integer(min_val, max_val),
         "reg": Categorical([Ridge(max_iter=5000)]),
         "reg__alpha": Real(0.01, 1.0, prior="log-uniform"),
-        "reduce_dims__n_components": Categorical([5, 15, 0.95]),
-        "rfe__n_features_to_select": Integer(5, 15)
-    },
-    # PLS
-    {
-        "RBS__M": Integer(min_val, max_val),
-        "reg": Categorical([PLSRegression(max_iter=5000)]),
-        "reg__n_components": Integer(2, min(10, X.shape[1])-1),
-        "reduce_dims__n_components": Categorical([5, 15, 0.95]),
+        "reduce_dims__n_components": Categorical([2, 0.95]),
         "rfe__n_features_to_select": Integer(5, 15)
     },
     # SVR
@@ -318,14 +306,68 @@ param_space_pca_rfe = [
         "reg": Categorical([SVR()]),
         "reg__C": Real(0.1, 10.0, prior="log-uniform"),
         "reg__kernel": Categorical(['rbf', 'linear']),
-        "reduce_dims__n_components": Categorical([5, 15, 0.95]),
+        "reduce_dims__n_components": Categorical([2, 0.95]),
         "rfe__n_features_to_select": Integer(5, 15)
     }
 ]
 #%%
 
 #cv = RepeatedKFold(n_splits=20, n_repeats=5, random_state=0)
-cv=3
+#cv=3
+#%%
+
+pipe.fit(X[:10], Y[:10])
+print(pipe.named_steps)
+print(pipe.get_params().keys())
+print(pipe.score(X[:10], Y[:10]))
+
+####TESTS TO SE IF OVERFITTING IS HAPPENING
+#%%
+
+cv=2
+factor= (cv-1)/cv
+min_val = min(int(np.sqrt(X.shape[0]*factor)), int(X.shape[0]*factor))
+max_val = max(int(np.sqrt(X.shape[0]*factor)), int(X.shape[0]*factor))
+overfit_test_param_grid = [
+    {
+        "RBS__M": range(min_val, max_val),  
+        "reg": [LinearRegression()],
+        "reg__fit_intercept": [True, False],
+    },
+]
+
+gridtestof = GridSearchCV(pipefs, overfit_test_param_grid, cv=cv, scoring=("r2","neg_mean_absolute_percentage_error"), n_jobs=-1, verbose=2, return_train_score=True, error_score='raise', refit="r2")
+gridtestof.fit(X, Y)
+
+print("best score CV feat sel:", gridtestof.best_score_)
+print("best params:", gridtestof.best_params_)
+#%%
+of_test_pipe_pca_rfe = Pipeline([
+    ('scale', RobustScaler()),
+    ("RBS", RBFFeatures(M=10)),
+    ("rfe", RFE(estimator=LinearRegression())),  # choose desired number
+    ('reduce_dims', PCA(n_components=0.99)),
+    ("reg", LinearRegression())
+])
+
+of_test_param_grid_pca_rfe = [
+    # LinearRegression
+    {
+        "RBS__M": range(min_val, max_val),
+        "reg": [LinearRegression()],
+        "reg__fit_intercept": [True, False],
+        "reduce_dims__n_components": [3, 0.95,0.99],
+        'rfe__n_features_to_select': [3, 5, 7, 10],
+    },
+]
+
+
+gridtestofpcarfe = GridSearchCV(of_test_pipe_pca_rfe, of_test_param_grid_pca_rfe, cv=cv, scoring=("r2","neg_mean_absolute_percentage_error"), n_jobs=-1, verbose=2, return_train_score=True, error_score='raise', refit="r2")
+gridtestofpcarfe.fit(X, Y)
+
+print("best score CV PCA + RFE:", gridtestofpcarfe.best_score_)
+print("best params:", gridtestofpcarfe.best_params_)
+##################################
 #%%
 grid = GridSearchCV(pipe, param_grid, cv=cv, scoring=("r2","neg_mean_absolute_percentage_error"), n_jobs=-1, verbose=2, return_train_score=True, refit="r2")
 grid.fit(X, Y)
@@ -340,6 +382,7 @@ gridfs.fit(X, Y)
 print("best score CV feat sel:", gridfs.best_score_)
 print("best params:", gridfs.best_params_)
 
+
 #%%
 gridpca = GridSearchCV(pipepca, param_grid_pca, cv=cv, scoring="r2", n_jobs=-1, verbose=2, refit="r2", return_train_score=True)
 gridpca.fit(X, Y)
@@ -351,10 +394,12 @@ print("best params:", gridpca.best_params_)
 #%%
 
 gridpcarfe = GridSearchCV(pipe_pca_rfe, param_grid_pca_rfe, cv=cv, scoring="r2", n_jobs=-1, verbose=2, refit="r2", return_train_score=True)
-gridpca.fit(X, Y)
+#%%
+gridpcarfe.fit(X, Y)
 
 print("best score PCA RFE:", gridpcarfe.best_score_)
 print("best params:", gridpcarfe.best_params_)
+
 
 #%%
 
@@ -380,8 +425,13 @@ print("best params:", gridfs.best_params_)
 print("best score CV feat sel:", gridpca.best_score_)
 print("best params:", gridpca.best_params_)
 #%%
+print("best score PCA RFE:", gridpcarfe.best_score_)
+print("best params:", gridpcarfe.best_params_)
+#%%
 ########################### Bayes search
 n_iter = 5
+
+#%%
 bayes = BayesSearchCV(pipe, param_space, cv=cv, scoring="r2", n_jobs=-1, verbose=2, return_train_score=True,
     refit="r2", n_iter=n_iter)
 bayes.fit(X, Y)
@@ -414,7 +464,7 @@ bayespcarfe = BayesSearchCV(pipe_pca_rfe, param_space_pca_rfe, cv=cv, scoring=("
 bayespcarfe.fit(X, Y)
 
 #%%
-print("best score BSearch pca:", bayespcarfe.best_score_)
+print("best score BSearch pca + rfe:", bayespcarfe.best_score_)
 print("best params:", bayespcarfe.best_params_)
 
 
@@ -442,14 +492,14 @@ except Exception as e:
 
 pipe_lasso = Pipeline([
     ('scaler1', RobustScaler()),
-    ('rbf', RBFFeatures(M=10)),
+    ('RBF', RBFFeatures(M=10)),
     ('scaler2', StandardScaler()),
     ('lasso', Lasso(max_iter=20000, tol=1e-4))
 ])
 
 pipe_lasso_pca = Pipeline([
     ('scaler1', RobustScaler()),
-    ('rbf', RBFFeatures(M=10)),
+    ('RBF', RBFFeatures(M=10)),
     ('pca', PCA()),              
     ('scaler2', StandardScaler()),
     ('lasso', Lasso(max_iter=20000, tol=1e-4))
@@ -457,24 +507,38 @@ pipe_lasso_pca = Pipeline([
 
 pipe_lasso_fs = Pipeline([
     ("scaler", RobustScaler()),
-    ("RBS", RBFFeatures(M=10)), 
+    ("RBF", RBFFeatures(M=10)), 
     ('drop_corr', DropHighlyCorrelated(threshold=0.99)),
     ('drop_low_target', DropLowTargetCorrelation(threshold=0.01)),     # placeholder M (will be overridden)
     ('lasso', Lasso(max_iter=20000, tol=1e-4)  )
 ])    
 
 param_grid_lasso = {
-    'rbf__M': [5, 10, 15],
-    'lasso__alpha': [1e-3, 1e-2, 1e-1, 1]
+    'RBF__M': range(min_val, 1000),
+    'lasso__alpha': [1e-4,1e-3, 1e-1, 1]
 }
 
 param_grid_lasso_pca = {
-    'rbf__M': [5, 10, 15],
+    'rbf__M': range(min_val, 1000),
     'pca__n_components': [5, 10, 15],
-    'lasso__alpha': [ 1e-2, 1e-1, 1]
+    'lasso__alpha': [1e-4,1e-3, 1e-1, 1]
 }
 
+#%%
 
+gridlasso = GridSearchCV(pipe_lasso, param_grid_lasso, cv=cv, scoring="r2", n_jobs=-1, verbose=2, refit="r2", return_train_score=True)
+gridlasso.fit(X, Y)
+
+#%%
+print("best score Lasso:", gridlasso.best_score_)
+print("best params:", gridlasso.best_params_)
+
+#%%
+gridlassofs = GridSearchCV(pipe_lasso_fs, param_grid_lasso, cv=cv, scoring="r2", n_jobs=-1, verbose=2, refit="r2", return_train_score=True)
+gridlassofs.fit(X, Y)
+#%%
+print("best score Lasso:", gridlassofs.best_score_)
+print("best params:", gridlassofs.best_params_)
 
 #%%
 #%% Plotting train scores vs test scores 
@@ -519,46 +583,211 @@ def plot_train_vs_test(df):
 plot_train_vs_test(df)
 # %%
 
-def plot_overfitting_limit(grid):
-
-    df = pd.DataFrame(grid.cv_results_)
-
-    # Unique models
-    models = np.unique(results['param_reg'])
-
-    plt.figure(figsize=(8, 5))
-
-    for model in models:
-        # Mask for this model
-        mask = results['param_reg'] == model
+def plot_overfitting_limit(grid, figsize=(12, 6), save_path=None):
+    """
+    Plot train and CV scores vs number of RBF features for each model in a GridSearchCV.
+    
+    Parameters:
+    - grid : fitted GridSearchCV object
+    - figsize : tuple, size of the figure
+    - save_path : str or None, file path to save the figure
+    """
+    results = grid.cv_results_
+    
+    # Convert estimator objects to class names
+    model_names = np.array([type(param['reg']).__name__ for param in results['params']])
+    models = np.unique(model_names)
+    
+    n_models = len(models)
+    n_cols = min(3, n_models)
+    n_rows = int(np.ceil(n_models / n_cols))
+    
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize, squeeze=False)
+    axes = axes.flatten()
+    
+    for i, model in enumerate(models):
+        ax = axes[i]
+        mask = model_names == model
         
-        # Extract number of RBF features and scores
-        M_values = np.array([param['RBS__M'] for param in results['params']])[mask]
-        test_scores = results['mean_test_score'][mask]
+        # Extract RBF numbers and scores
+        M_values = np.array([param.get('RBS__M', 0) for param in results['params']])[mask]
         train_scores = results['mean_train_score'][mask]
+        test_scores = results['mean_test_score'][mask]
         
-        # Sort by RBF features
+        # Sort by RBF number
         sorted_idx = np.argsort(M_values)
         M_values = M_values[sorted_idx]
-        test_scores = test_scores[sorted_idx]
         train_scores = train_scores[sorted_idx]
+        test_scores = test_scores[sorted_idx]
         
-        # Plot test and train scores
-        plt.plot(M_values, test_scores, marker='o', label=f'{model} (CV)')
-        plt.plot(M_values, train_scores, marker='x', linestyle='--', label=f'{model} (Train)')
-
-    plt.xlabel('Number of RBF features (M)')
-    plt.ylabel('Score')
-    plt.title('Train vs CV Score vs Number of RBF Features')
-    plt.legend()
-    plt.grid(True)
+        # Plot
+        ax.plot(M_values, train_scores, color="blue", linestyle='--', label='Train')
+        ax.plot(M_values, test_scores, color="red", label='CV')
+        ax.set_title(model)
+        ax.set_xlabel('Number of RBF features (M)')
+        ax.set_ylabel('Score')
+        ax.grid(True)
+        ax.legend()
+    
+    # Remove unused subplots
+    for j in range(i+1, len(axes)):
+        fig.delaxes(axes[j])
+    
+    plt.tight_layout()
+    
+    if save_path is not None:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Figure saved to: {save_path}")
+    
     plt.show()
 
     desktop_folder = "/mnt/c/Users/filom/Desktop/Project1 ML"
-    file_path = os.path.join(desktop_folder, f"train_vs_test_r2 - {RegressorName}, {time}.png")
+    file_path = os.path.join(desktop_folder, f"train_test_vs_r2 {time}.png")
     plt.savefig(file_path, dpi=300, bbox_inches="tight")
     plt.close()
     print("Figure saved to:", file_path)
 
 plot_overfitting_limit(grid)
+# %%
+plot_overfitting_limit(gridfs)
+# %%
+plot_overfitting_limit(gridpca)
+
+#%%
+print(min_val, max_val)
+# %%
+
+
+def plot_score_train_test_vs_rbfs(grid, model_type, figsize=(14, 8), save_path=None, desktop_save=True):
+    """
+    Plot train and CV scores vs number of RBF features for one selected model type.
+    Creates one subplot per unique hyperparameter configuration for that model.
+
+    Parameters
+    ----------
+    grid : fitted GridSearchCV object
+        The result of GridSearchCV.fit(...)
+    model_type : str or class
+        Model to plot. Accepts 'LinearRegression', 'Ridge', 'PLSRegression', 'SVR'
+        or the actual estimator class (e.g. LinearRegression).
+    figsize : tuple
+        Figure size.
+    save_path : str or None
+        If provided, save final figure to this path.
+    desktop_save : bool
+        If True also saves a copy to desktop path used in previous conversation.
+    """
+    # Normalize model_type to string class name
+    if isinstance(model_type, str):
+        model_name = model_type
+    else:
+        model_name = model_type.__name__
+
+    results = grid.cv_results_
+    params_list = results['params']
+
+    # Build array of model class names for each param set
+    param_model_names = np.array([type(p['reg']).__name__ for p in params_list])
+
+    # Filter only rows corresponding to requested model
+    mask_model = param_model_names == model_name
+    if not np.any(mask_model):
+        raise ValueError(f"No results found for model '{model_name}' in grid.cv_results_. "
+                         f"Available models: {np.unique(param_model_names)}")
+
+    # Extract only the relevant entries
+    relevant_params = [params_list[i] for i in np.where(mask_model)[0]]
+    relevant_train = np.array(results['mean_train_score'])[mask_model]
+    relevant_test = np.array(results['mean_test_score'])[mask_model]
+
+    # For each param dict, extract RBS__M and reg__* hyperparameters
+    Ms = np.array([p.get('RBS__M', 0) for p in relevant_params])
+
+    # Create a key that groups by hyperparameters under 'reg__*'
+    def reg_hyperparam_key(p):
+        # collect reg__... keys and their values, sorted by key name
+        items = [(k[len('reg__'):], p[k]) for k in p.keys() if k.startswith('reg__')]
+        # If there are no reg__ keys, set to empty tuple (works for LinearRegression with only default)
+        if not items:
+            return tuple()
+        items_sorted = tuple(sorted(items))
+        return items_sorted
+
+    keys = [reg_hyperparam_key(p) for p in relevant_params]
+    unique_keys = []
+    key_to_indices = {}
+    for idx, k in enumerate(keys):
+        if k not in key_to_indices:
+            key_to_indices[k] = []
+            unique_keys.append(k)
+        key_to_indices[k].append(idx)
+
+    n_plots = len(unique_keys)
+    n_cols = min(3, n_plots)
+    n_rows = int(np.ceil(n_plots / n_cols))
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize, squeeze=False)
+    axes = axes.flatten()
+
+    for i, k in enumerate(unique_keys):
+        ax = axes[i]
+        idxs = key_to_indices[k]
+        M_vals = Ms[idxs]
+        train_vals = relevant_train[idxs]
+        test_vals = relevant_test[idxs]
+
+        # Sort by M
+        sorted_idx = np.argsort(M_vals)
+        M_sorted = M_vals[sorted_idx]
+        train_sorted = train_vals[sorted_idx]
+        test_sorted = test_vals[sorted_idx]
+
+        ax.plot(M_sorted, train_sorted, linestyle='--', label='Train')
+        ax.plot(M_sorted, test_sorted, label='CV')
+        ax.set_xlabel('Number of RBF features (M)')
+        ax.set_ylabel('Score')
+        ax.grid(True)
+
+        # Human-readable label from hyperparam key
+        if k == tuple():
+            label = "default / no reg__ params"
+        else:
+            label = ", ".join(f"{name}={val}" for name, val in k)
+        ax.set_title(label)
+        ax.legend()
+
+    # remove unused subplots
+    for j in range(i+1, len(axes)):
+        fig.delaxes(axes[j])
+
+    plt.suptitle(f"{model_name} — Train vs CV scores by RBF count and hyperparam setting", fontsize=14)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+    # Save if requested
+    if save_path is not None:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print("Saved figure to:", save_path)
+
+    # Optional desktop save (keeps previous behaviour)
+    if desktop_save:
+        try:
+            desktop_folder = "/mnt/c/Users/filom/Desktop/Project1 ML"
+            os.makedirs(desktop_folder, exist_ok=True)
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            file_path = os.path.join(desktop_folder, f"{model_name}_train_test_vs_r2_{timestamp}.png")
+            plt.savefig(file_path, dpi=300, bbox_inches="tight")
+            print("Figure saved to:", file_path)
+        except Exception as e:
+            print("Desktop save failed:", e)
+
+    plt.show()
+    plt.close(fig)
+#%%
+# Example usage:
+
+plot_score_train_test_vs_rbfs(gridfs, 'LinearRegression')  
+plot_score_train_test_vs_rbfs(gridfs, 'Ridge')  
+plot_score_train_test_vs_rbfs(gridfs, 'SVR')  
+plot_score_train_test_vs_rbfs(gridfs, 'PLSRegression')  
+
 # %%
