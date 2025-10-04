@@ -2,7 +2,7 @@
 %run data_imports.py
 
 # %% df info
-print(df.iloc[0, 1])
+print(df.head(100))
 print(df.info())
 print(df.shape)
 print(df['target'].unique())
@@ -13,21 +13,17 @@ target is categorical (exercise) values 0,1,2
 each skeleton feature cell is an array (132,) 33 * 2 *2 (keypoints, (x,y), (mean,std))
 '''
 # %%
-data = df.iloc[0, 1]
-means = data[:66].reshape(2, 33).T
-stds = data[66:].reshape(2, 33).T
-data = pd.DataFrame({
-    'x_mean': means[:, 0],
-    'y_mean': means[:, 1],
-    'x_std': stds[:, 0],
-    'y_std': stds[:, 1],
-    'keypoint': list(range(33))})
+data = df.iloc[328, 1]
+means = data[:66]
+x_means = means[:33]
+y_means = means[33:]
 
-plt.plot(data['x_mean'], data['y_mean'], 'o')
+x_means2 = means[::2]
+y_means2 = means[1::2]
+
+fig, ax = plt.subplots(1,2, figsize=(10,5))
+ax[0].plot(x_means, y_means, 'o')
+ax[1].plot(x_means2, y_means2, 'o')
 plt.show()
-plt.plot(data['x_std'], data['y_std'], 'o')
-plt.show()
-
-
 
 # %%
