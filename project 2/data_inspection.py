@@ -1,3 +1,6 @@
-import subprocess
-subprocess.run(["python", ".\\AAut-projects\\project 2\\data_imports.py"])
+from data_imports import *
 
+#df info
+if 1:
+    df.info()
+    print(df.describe().T)
