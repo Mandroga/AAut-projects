@@ -58,7 +58,7 @@ y= np.load('y_train.npy')
 
 X_df = pd.DataFrame(X)
 y_df = pd.DataFrame(y)
-X_df.columns = X_df.columns.astype(str)
+# X_df.columns = X_df.columns.astype(str)
 
 df = X_df.copy()
 df['target'] = y_df
