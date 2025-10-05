@@ -27,7 +27,6 @@ if 1:
     from sklearn.feature_selection import mutual_info_regression, mutual_info_classif
     from sklearn.feature_selection import VarianceThreshold
     from sklearn.model_selection import ParameterGrid
-    from sklearn.base import BaseEstimator, TransformerMixin
     from scipy.stats import trim_mean
     from sklearn.base import BaseEstimator, TransformerMixin, clone
     import joblib
@@ -40,6 +39,15 @@ if 1:
     from sklearn.preprocessing import RobustScaler
     import os
     import datetime
+    from sklearn.model_selection import train_test_split, GridSearchCV
+    from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.neural_network import MLPClassifier
+    from sklearn.metrics import classification_report, confusion_matrix
+    from scipy.spatial.distance import euclidean
+
+    RANDOM_STATE = 42
+
 
 # %% useful functions
 if 1:
