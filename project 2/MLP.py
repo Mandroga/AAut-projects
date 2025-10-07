@@ -2,13 +2,16 @@
 #%%
 
 from tkinter import Y
+from turtle import width
+
+from NN import X
 
 
 %run data_imports.py
 
 # %% 
 
-X= np.array(df['Skeleton_Features'].to_list())
+
 y = np.array(df['target'].to_list())
 
 hands= [19,20]
@@ -40,10 +43,7 @@ print(my_X_df)
 
 
 
-import pickle
-path = "Xtrain1.pkl"
-with open(path, "rb") as f:
-    X = pickle.load(f)
+X= np.array(df['Skeleton_Features'].to_list())
 Y=np.load("Ytrain1.npy")
 #%%    
 
@@ -61,11 +61,10 @@ class PreProcessing(BaseEstimator, TransformerMixin):
         They will be stored as attributes.
         Example: param1 = scaling factor, param2 = threshold, etc.
         """
-        self.param1 = param1
-        self.param2 = param2
-        self.maximum_arms_length={}
         self.l_arm_dic = {}
         self.r_arm_dic= {}
+        self.heights ={}
+        self.widths={}
 
     def fit(self, X, y=None):
         """
@@ -79,14 +78,12 @@ class PreProcessing(BaseEstimator, TransformerMixin):
         Returns:
         self : object
         """
-        maximum_arms_length={}
-        l_arm_dic = {}
-        r_arm_dic= {}
-        for i in range(max(np.array(X['Patient_Id']))):
-            Feat_Arr_arr= X.loc[X['Patient_Id'] == i, ['Skeleton_Features']]
-            arms_lengths=[]
-            for feat_arr, index in zip(Feat_Arr_arr, X.index):
+
+        self.l_arm_dic = {}
+        self.r_arm_dic = {}
+            for index, feat_arr in enumerate(X):
             
+                #Distance from shoulder to hand
                 l_shoulder_pos, l_hand_pos= (feat_arr[11*2],feat_arr[11*2+1]),(feat_arr[19*2],feat_arr[19*2+1])
                 r_shoulder_pos, r_hand_pos = (feat_arr[12*2],feat_arr[12*2+1]),(feat_arr[20*2],feat_arr[20*2+1])
                 
@@ -95,10 +92,21 @@ class PreProcessing(BaseEstimator, TransformerMixin):
                 self.l_arm_dic[index] = l_arm
                 self.r_arm_dic[index]= r_arm
 
-                arms_lengths+=[max(l_arm,r_arm),]
+                #Height
+                l_eye_pos, l_foot_pos= (feat_arr[3*2],feat_arr[3*2+1]),(feat_arr[29*2],feat_arr[29*2+1]) 
+                r_eye_pos, r_foot_pos = (feat_arr[6*2],feat_arr[6*2+1]),(feat_arr[30*2],feat_arr[30*2+1])
 
-            self.maximum_arms_length[i]=max(arms_length)
-                 
+                l_height = euclidean(l_eye_pos,l_foot_pos)
+                r_height = euclidean(r_eye_pos, r_foot_pos)
+                height = max(l_height, r_height)
+                self.heights[index]= height
+
+                #Width
+                l_hip_pos, r_hip_pos= (feat_arr[23*2],feat_arr[23*2+1]),(feat_arr[24*2],feat_arr[24*2+1]) 
+                width=euclidean(l_hip_pos, r_hip_pos)
+                self.widths[index]=width
+
+
 
         return self
     
