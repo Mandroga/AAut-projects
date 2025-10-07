@@ -1,44 +1,8 @@
 
 #%%
 
-from tkinter import Y
-from turtle import width
-
-from NN import X
-
-
 %run data_imports.py
 
-# %% 
-
-
-y = np.array(df['target'].to_list())
-
-hands= [19,20]
-X_nhposy = np.column_stack([
-    X[:, 0*2+1] - X[:, 19*2+1],
-    X[:, 0*2+1] - X[:, 20*2+1]
-])
-
-#%%
-print(X_nhposy.shape)
-
-#%%
-featkeep = [13,14,17,18,25,26,27,28]
-
-Xi=np.array([X[:,i*2] for i in range(len(X)) if i in featkeep]+[X[:,i*2+1] for i in range(len(X)) if i in featkeep]+[ X[:,i*4] for i in range(len(X)) if i in featkeep]+[X[:,i*4+1] for i in range(len(X)) if i in featkeep])   
-
-Xi = Xi.T  # shape becomes (700, 24)
-
-
-my_X = np.hstack([Xi, X_nhposy])
-
-
-my_X_df = pd.DataFrame({
-    'Patient_Id': df['Patient_Id'],
-    'Features': list(my_X)  
-
-print(my_X_df)
 #%%
 
 
@@ -47,7 +11,6 @@ X= np.array(df['Skeleton_Features'].to_list())
 Y=np.load("Ytrain1.npy")
 #%%    
 
-from scipy.spatial.distance import euclidean
 
 class PreProcessing(BaseEstimator, TransformerMixin):
     """
@@ -55,16 +18,20 @@ class PreProcessing(BaseEstimator, TransformerMixin):
     Implements fit/transform methods so it can be used in a Pipeline.
     """
 
-    def __init__(self, param1=None, param2=None):
+    def __init__(self):
         """
         Initialize any hyperparameters here.
         They will be stored as attributes.
         Example: param1 = scaling factor, param2 = threshold, etc.
         """
-        self.l_arm_dic = {}
-        self.r_arm_dic= {}
-        self.heights ={}
-        self.widths={}
+        self.l_arm_arr = np.array([])
+        self.r_arm_arr= np.array([])
+        self.l_leg_arr=np.array([])
+        self.r_leg_arr=np.array([])
+        self.heights =np.array([])
+        self.widths=np.array([])
+        self.l_hny=np.array([])
+        self.r_hny=np.array([])
 
     def fit(self, X, y=None):
         """
@@ -79,33 +46,37 @@ class PreProcessing(BaseEstimator, TransformerMixin):
         self : object
         """
 
-        self.l_arm_dic = {}
-        self.r_arm_dic = {}
-            for index, feat_arr in enumerate(X):
-            
-                #Distance from shoulder to hand
-                l_shoulder_pos, l_hand_pos= (feat_arr[11*2],feat_arr[11*2+1]),(feat_arr[19*2],feat_arr[19*2+1])
-                r_shoulder_pos, r_hand_pos = (feat_arr[12*2],feat_arr[12*2+1]),(feat_arr[20*2],feat_arr[20*2+1])
-                
-                l_arm = euclidean(l_shoulder_pos,l_hand_pos)
-                r_arm = euclidean(r_shoulder_pos, r_hand_pos)
-                self.l_arm_dic[index] = l_arm
-                self.r_arm_dic[index]= r_arm
+        # Distance from shoulder to hand
+        l_shoulder_pos = X[:, 11*2:11*2+2]  # shape (n_samples, 2)
+        r_shoulder_pos = X[:, 12*2:12*2+2]
+        l_hand_pos = X[:, 19*2:19*2+2]
+        r_hand_pos = X[:, 20*2:20*2+2]
 
-                #Height
-                l_eye_pos, l_foot_pos= (feat_arr[3*2],feat_arr[3*2+1]),(feat_arr[29*2],feat_arr[29*2+1]) 
-                r_eye_pos, r_foot_pos = (feat_arr[6*2],feat_arr[6*2+1]),(feat_arr[30*2],feat_arr[30*2+1])
+        self.l_arm_arr = np.linalg.norm(l_hand_pos - l_shoulder_pos, axis=1)
+        self.r_arm_arr = np.linalg.norm(r_hand_pos - r_shoulder_pos, axis=1)
 
-                l_height = euclidean(l_eye_pos,l_foot_pos)
-                r_height = euclidean(r_eye_pos, r_foot_pos)
-                height = max(l_height, r_height)
-                self.heights[index]= height
+        # Height
+        l_eye_pos = X[:, 3*2:3*2+2]
+        r_eye_pos = X[:, 6*2:6*2+2]
+        l_foot_pos = X[:, 29*2:29*2+2]
+        r_foot_pos = X[:, 30*2:30*2+2]
 
-                #Width
-                l_hip_pos, r_hip_pos= (feat_arr[23*2],feat_arr[23*2+1]),(feat_arr[24*2],feat_arr[24*2+1]) 
-                width=euclidean(l_hip_pos, r_hip_pos)
-                self.widths[index]=width
+        l_height = np.linalg.norm(l_eye_pos - l_foot_pos, axis=1)
+        r_height = np.linalg.norm(r_eye_pos - r_foot_pos, axis=1)
+        self.heights = np.maximum(l_height, r_height)
 
+        # Width (hip distance)
+        l_hip_pos = X[:, 23*2:23*2+2]
+        r_hip_pos = X[:, 24*2:24*2+2]
+        self.widths = np.linalg.norm(l_hip_pos - r_hip_pos, axis=1)
+
+        # Distance from foot to hip
+        self.l_leg_arr = np.linalg.norm(l_hip_pos - l_foot_pos, axis=1)
+        self.r_leg_arr = np.linalg.norm(r_hip_pos - r_foot_pos, axis=1)
+
+        # Hand - nose difference in y
+        self.l_hny = X[:,0*2+1] - X[:,19*2+1]
+        self.r_hny = X[:,0*2+1] - X[:,20*2+1]
 
 
         return self
@@ -113,27 +84,11 @@ class PreProcessing(BaseEstimator, TransformerMixin):
     @staticmethod
     def update_skeleton_features(feat_arr):
         feat_arr = list(feat_arr)
-        #hand nose y difference
-        feat_arr_add = [
-            feat_arr[0*2+1] - feat_arr[19*2+1],
-            feat_arr[0*2+1] - feat_arr[20*2+1]
-        ]
 
-        featkeep = [13,14,17,18,25,26,27,28]
-        feat_arr = [feat_arr[i*2] for i in featkeep]+[feat_arr[i*2+1]for i in featkeep]+[feat_arr[i*4] for i in featkeep]+[feat_arr[i*4+1]for i in featkeep]+feat_arr_add
+        featkeep = [13,14,15,16,17,18,19,20,21,22,25,26,27,28]
+        feat_arr = [feat_arr[i*2] for i in featkeep]+[feat_arr[i*2+1]for i in featkeep]+[feat_arr[i*4] for i in featkeep]+[feat_arr[i*4+1]for i in featkeep]
 
 
-        return feat_arr
-
-    @staticmethod
-    def extra_features(feat_arr):
-        feat_arr = list(feat_arr)
-        #hand nose y difference
-        feat_arr += [
-            feat_arr[0*2+1] - feat_arr[19*2+1],
-            feat_arr[0*2+1] - feat_arr[20*2+1]
-        ]
-    
         return feat_arr
 
     def transform(self, X):
@@ -147,34 +102,38 @@ class PreProcessing(BaseEstimator, TransformerMixin):
         X_transformed : array-like, shape (n_samples, n_features_new)
         """
         X_transformed = X.copy()
+
+        normalized_r_arm = self.r_arm_arr / self.heights
+        normalized_l_arm = self.l_arm_arr / self.heights
+
+        normalized_r_leg=self.r_leg_arr /self.heights
+        normalized_l_leg=self.l_leg_arr / self.heights
+
+        normalized_r_hand_std = X_transformed[:,20*4+1]/self.widths
+        normalized_l_hand_std = X_transformed[:,19*4+1]/self.widths
+
         X_transformed["Skeleton_Features"] = X_transformed["Skeleton_Features"].apply(self.update_skeleton_features)
-        X_transformed["Skeleton_Features"] = X_transformed["Skeleton_Features"].apply(self.extra_features)
 
-        for row in X_transformed.itertuples(index=True):
-            patient = row.Patient_Id
-            feat=row.Skeleton_Features
-            index=row.index
+        for i, feats in enumerate(X_transformed["Skeleton_Features"]):
+            feats.extend([normalized_l_arm[i], normalized_r_arm[i],normalized_l_leg[i],normalized_r_leg[i], normalized_l_hand_std[i], normalized_r_hand_std[i]])
 
-            normalized_r_hand=self.r_arm_dic[index]/self.maximum_arms_length[patient]
-            normalized_l_hand=self.l_arm_dic[index]/self.maximum_arms_length[patient]
-            feat+=[normalized_r_hand, normalized_l_hand]
 
         
         return X_transformed
 
 
 # %%
-X_train, X_test, y_train, y_test = train_test_split(X,Y, test_size=0.2, random_state=RANDOM_STATE, stratify=y)
+X_train, X_test, y_train, y_test = train_test_split(X,Y, test_size=0.2, random_state=RANDOM_STATE, stratify=Y)
 
 
 pipe = Pipeline([
     ('scaler', StandardScaler()),
-    ('my_pre_processing', PreProcessing())
+    ('my_pre_processing', PreProcessing()),
     ('mlp', MLPClassifier(max_iter=500, random_state=RANDOM_STATE, early_stopping=True,validation_fraction=0.1))
 ])
 
 param_grid = {
-    'mlp__hidden_layer_sizes': [(50,), (100,), (100,50)],
+    'mlp__hidden_layer_sizes': [(100,), (100,50), (100,100,100)],
     'mlp__activation': ['relu', 'tanh', "logistic"],
     'mlp__solver': ['adam', 'sgd'],
     'mlp__alpha': [1e-4, 1e-3],
