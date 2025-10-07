@@ -1,15 +1,41 @@
 
 #%%
 
+
+
 %run data_imports.py
 
+
+#%%
+from operator import index
+import pickle
+
+path = "Xtrain1.pkl"
+with open(path, "rb") as f:
+    X_df = pickle.load(f)
+
+X = np.stack(X_df["Skeleton_Features"].values)
+Y = np.load("Ytrain1.npy")
 #%%
 
+n1 = 12
+n2 = 4
+
+df_train = df[df["Patient_Id"] != n1]
+df_train = df_train[df_train["Patient_Id"] != n2]
+
+X_train = np.array(df_train['Skeleton_Features'].to_list())
 
 
-X= np.array(df['Skeleton_Features'].to_list())
-Y=np.load("Ytrain1.npy")
-#%%    
+df_test = df[df["Patient_Id"].isin([n1, n2])]
+
+X_test = np.array(df_test['Skeleton_Features'].to_list())
+
+y_train = df_train['target']
+y_test = df_test['target']
+
+
+#%% separate test train
 
 
 class PreProcessing(BaseEstimator, TransformerMixin):
@@ -29,7 +55,9 @@ class PreProcessing(BaseEstimator, TransformerMixin):
         self.l_leg_arr=np.array([])
         self.r_leg_arr=np.array([])
         self.heights =np.array([])
+        self.heights_d =np.array([])
         self.widths=np.array([])
+        self.widths_d= np.array([])
         self.l_hny=np.array([])
         self.r_hny=np.array([])
 
@@ -44,6 +72,37 @@ class PreProcessing(BaseEstimator, TransformerMixin):
         
         Returns:
         self : object
+        """
+
+
+        return self
+    
+    def update_skeleton_features(self, X):
+
+        r_hand = [16,18,20,22]
+        l_hand=[15,17,19,21]
+
+        r_foot=[28,30,32]
+        l_foot=[27, 29, 31]
+
+        featkeep = [13,14,25,26]
+        for index, feat_arr in enumerate(X):
+            feat_arr = [feat_arr[i*4] / self.widths[index] for i in featkeep]+[feat_arr[i*4+1] /self.heights[index] for i in featkeep]
+
+        for index in range(len(X)):
+            X[index]=
+
+        return feat_arr
+
+    def transform(self, X):
+        """
+        Apply the preprocessing to X.
+        
+        Parameters:
+        X : array-like, shape (n_samples, n_features)
+        
+        Returns:
+        X_transformed : array-like, shape (n_samples, n_features_new)
         """
 
         # Distance from shoulder to hand
@@ -63,12 +122,20 @@ class PreProcessing(BaseEstimator, TransformerMixin):
 
         l_height = np.linalg.norm(l_eye_pos - l_foot_pos, axis=1)
         r_height = np.linalg.norm(r_eye_pos - r_foot_pos, axis=1)
-        self.heights = np.maximum(l_height, r_height)
+        self.heights_d = np.maximum(l_height, r_height)
+
+        l_height_y = l_eye_pos[:,1] - l_foot_pos[:,1]
+        r_height_y = r_eye_pos[:,1] - r_foot_pos[:,1]
+        self.heights = np.maximum(l_height_y, r_height_y)
 
         # Width (hip distance)
         l_hip_pos = X[:, 23*2:23*2+2]
         r_hip_pos = X[:, 24*2:24*2+2]
-        self.widths = np.linalg.norm(l_hip_pos - r_hip_pos, axis=1)
+        self.widths_d = np.linalg.norm(l_hip_pos - r_hip_pos, axis=1)
+
+        l_hip_x_pos = X[:, 23*2]
+        r_hip_x_pos = X[:, 24*2]
+        self.widths = l_hip_x_pos-r_hip_x_pos
 
         # Distance from foot to hip
         self.l_leg_arr = np.linalg.norm(l_hip_pos - l_foot_pos, axis=1)
@@ -77,31 +144,7 @@ class PreProcessing(BaseEstimator, TransformerMixin):
         # Hand - nose difference in y
         self.l_hny = X[:,0*2+1] - X[:,19*2+1]
         self.r_hny = X[:,0*2+1] - X[:,20*2+1]
-
-
-        return self
-    
-    @staticmethod
-    def update_skeleton_features(feat_arr):
-        feat_arr = list(feat_arr)
-
-        featkeep = [13,14,15,16,17,18,19,20,21,22,25,26,27,28]
-        feat_arr = [feat_arr[i*2] for i in featkeep]+[feat_arr[i*2+1]for i in featkeep]+[feat_arr[i*4] for i in featkeep]+[feat_arr[i*4+1]for i in featkeep]
-
-
-        return feat_arr
-
-    def transform(self, X):
-        """
-        Apply the preprocessing to X.
         
-        Parameters:
-        X : array-like, shape (n_samples, n_features)
-        
-        Returns:
-        X_transformed : array-like, shape (n_samples, n_features_new)
-        """
-        X_transformed = X.copy()
 
         normalized_r_arm = self.r_arm_arr / self.heights
         normalized_l_arm = self.l_arm_arr / self.heights
@@ -109,26 +152,40 @@ class PreProcessing(BaseEstimator, TransformerMixin):
         normalized_r_leg=self.r_leg_arr /self.heights
         normalized_l_leg=self.l_leg_arr / self.heights
 
-        normalized_r_hand_std = X_transformed[:,20*4+1]/self.widths
-        normalized_l_hand_std = X_transformed[:,19*4+1]/self.widths
+        normalized_r_hand_std = X[:,20*4+1]/self.widths
+        normalized_l_hand_std = X[:,19*4+1]/self.widths
 
-        X_transformed["Skeleton_Features"] = X_transformed["Skeleton_Features"].apply(self.update_skeleton_features)
+            # Update skeleton features row-wise
+        X_transformed_list = [self.update_skeleton_features(row) for row in X]
 
-        for i, feats in enumerate(X_transformed["Skeleton_Features"]):
-            feats.extend([normalized_l_arm[i], normalized_r_arm[i],normalized_l_leg[i],normalized_r_leg[i], normalized_l_hand_std[i], normalized_r_hand_std[i]])
+        # Convert to 2D NumPy array
+        X_transformed_array = np.array(X_transformed_list)
 
+        # Stack extra normalized features
+        extra_features = np.column_stack([
+            normalized_l_arm,
+            normalized_r_arm,
+            normalized_l_leg,
+            normalized_r_leg,
+            normalized_l_hand_std,
+            normalized_r_hand_std,
+            self.l_hny,
+            self.r_hny
+        ])
+        # Combine original features with normalized features
+        X_transformed = np.hstack([X_transformed_array, extra_features])
 
-        
         return X_transformed
 
 
 # %%
 X_train, X_test, y_train, y_test = train_test_split(X,Y, test_size=0.2, random_state=RANDOM_STATE, stratify=Y)
 
+#%%
 
 pipe = Pipeline([
-    ('scaler', StandardScaler()),
     ('my_pre_processing', PreProcessing()),
+    ('scaler', StandardScaler()),
     ('mlp', MLPClassifier(max_iter=500, random_state=RANDOM_STATE, early_stopping=True,validation_fraction=0.1))
 ])
 
@@ -144,10 +201,38 @@ param_grid = {
 
 }
 
-grid = GridSearchCV(pipe, param_grid, cv=5, n_jobs=-1, verbose=1)
+grid = GridSearchCV(pipe, param_grid, cv=5, n_jobs=-1, verbose=1, scoring='f1_macro')
 grid.fit(X_train, y_train)
-
-print("Best params:", grid.best_params_)
+#%%
+print("Best params MLP:", grid.best_params_)
+print("Best score MLP: ", grid.best_score_)
 y_pred = grid.predict(X_test)
+print("n1, n2 =", n1, n2, classification_report(y_test, y_pred))
+# %%
+from sklearn.svm import SVC
+
+
+pipe_SVM = Pipeline([
+    ('my_pre_processing', PreProcessing()),
+    ('scaler', StandardScaler()),
+    ('svm', SVC())
+    ])
+
+param_grid_SVM = {
+    'svm__C': [0.1, 1, 10],
+    'svm__kernel': ['linear', 'rbf', 'poly'],
+    'svm__gamma': ['scale', 'auto', 0.01, 0.1],
+    'svm__degree': [2, 3],
+    'svm__class_weight': [None, 'balanced']
+}
+
+grid_SVM = GridSearchCV(pipe_SVM, param_grid_SVM, cv=5, n_jobs=-1, verbose=1, scoring='f1_macro')
+grid_SVM.fit(X_train, y_train)
+#%%
+print("Best params SVM:", grid_SVM.best_params_)
+print("Best score SVM: ", grid_SVM.best_score_)
+y_pred = grid_SVM.predict(X_test)
+print(("n1, n2 =", n1, n2)
 print(classification_report(y_test, y_pred))
+
 # %%
