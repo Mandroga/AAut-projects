@@ -1,55 +1,56 @@
 # %% imports
-if 1:
-    import matplotlib
-    matplotlib.use("Qt5Agg")
-    from matplotlib.patches import Ellipse
-    import numpy as np
-    import pandas as pd
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.preprocessing import MinMaxScaler
-    import copy
-    import importlib
-    import tools
-    importlib.reload(tools) 
-    from tools import *
-    from sklearn.preprocessing import PolynomialFeatures
-    from sklearn.linear_model import LinearRegression
-    from sklearn.pipeline import Pipeline
-    from sklearn.model_selection import train_test_split
-    from sklearn.metrics import mean_squared_error, mean_absolute_percentage_error, r2_score
-    from sklearn.linear_model import Ridge, Lasso
-    import itertools
-    from sklearn.feature_selection import RFECV, RFE
-    from sklearn.model_selection import KFold, cross_val_score
-    from sklearn.cross_decomposition import PLSRegression
-    from skopt import BayesSearchCV
-    from skopt.space import Real, Integer, Categorical
-    from sklearn.feature_selection import mutual_info_regression, mutual_info_classif
-    from sklearn.feature_selection import VarianceThreshold
-    from sklearn.model_selection import ParameterGrid
-    from scipy.stats import trim_mean
-    from sklearn.base import BaseEstimator, TransformerMixin, clone
-    import joblib
-    from sklearn.decomposition import PCA
-    from sklearn.model_selection import GridSearchCV
-    from sklearn.ensemble import IsolationForest    
-    from sklearn.decomposition import PCA
-    from sklearn.svm import SVR
-    from sklearn.cluster import KMeans
-    from sklearn.preprocessing import RobustScaler
-    import os
-    import datetime
-    import xgboost as xgb
-    from sklearn.model_selection import train_test_split, GridSearchCV
-    from sklearn.pipeline import Pipeline
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.neural_network import MLPClassifier
-    from sklearn.metrics import classification_report, confusion_matrix
-    from scipy.spatial.distance import euclidean
-
-    RANDOM_STATE = 42
+import matplotlib
+matplotlib.use("Qt5Agg")
+from matplotlib.patches import Ellipse
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler
+import copy
+import importlib
+import tools
+importlib.reload(tools) 
+from tools import *
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import LinearRegression
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, mean_absolute_percentage_error, r2_score
+from sklearn.linear_model import Ridge, Lasso
+import itertools
+from sklearn.feature_selection import RFECV, RFE
+from sklearn.model_selection import KFold, cross_val_score
+from sklearn.cross_decomposition import PLSRegression
+from skopt import BayesSearchCV
+from skopt.space import Real, Integer, Categorical
+from sklearn.feature_selection import mutual_info_regression, mutual_info_classif
+from sklearn.feature_selection import VarianceThreshold
+from sklearn.model_selection import ParameterGrid
+from scipy.stats import trim_mean
+from sklearn.base import BaseEstimator, TransformerMixin, clone
+import joblib
+from sklearn.decomposition import PCA
+from sklearn.model_selection import GridSearchCV
+from sklearn.ensemble import IsolationForest    
+from sklearn.decomposition import PCA
+from sklearn.svm import SVR
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import RobustScaler
+import os
+import datetime
+import xgboost as xgb
+from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.neural_network import MLPClassifier
+from sklearn.metrics import classification_report, confusion_matrix
+from scipy.spatial.distance import euclidean
+from sklearn.metrics import f1_score, make_scorer, classification_report
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+import pickle
+RANDOM_STATE = 42
 
 
 # %% useful functions
@@ -225,10 +226,12 @@ if 1:
     metric_names = ['MSE', 'MAPE', 'wMAPE','R2']   
 
 # %% data
-if 1:
-    X = pd.read_pickle("Xtrain1.pkl")
-    X_kp = X.copy()
-    cols = [txt+str(i) for txt in ['xmean','ymean','xstd','ystd'] for i in range(33)]
-    Y= pd.DataFrame(np.load("Ytrain1.npy"))
-    df = X.copy()
-    df['target'] = Y
+with open("Xtrain1.pkl", "rb") as f:
+    X = pickle.load(f)
+Y= np.load("Ytrain1.npy")
+df = pd.DataFrame(X)
+df['target'] = Y
+
+df2 = X.copy()
+df2['target'] = Y
+# %%

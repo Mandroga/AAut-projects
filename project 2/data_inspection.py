@@ -1,4 +1,4 @@
-# %%
+# %% imports
 %run data_imports.py
 
 # %% df info
@@ -30,14 +30,17 @@ for i in keypoints:
     df_[f'ystd{i}'] = df_['Skeleton_Features'].apply(lambda x: x[y_std_i[i]])
 df_ = df_.drop(['Skeleton_Features'], axis=1)
 
-# %%
-print(df['target'].value_counts())
+# %% target counts
+#print(df['target'].value_counts())
+
+print(df2.groupby('Patient_Id')['target'].value_counts().unstack())
 print(df.groupby('Patient_Id')['target'].value_counts().unstack())
 '''
 Classes are unbalanced!
 Each patient did a different number of execises of each kind
 '''
-# %%
+
+# %% testing scores
 n = 700
 #indexes = list(range(33))
 indexes = [0, 19,20, 15, 16, 21, 22, 25,26, 31, 32]
@@ -226,4 +229,26 @@ so we can weight the samples for training
 Some patients are left handed others are right handed ?
 Scoring/Weights needs to be normalized by patient size
 '''
+# %% diffs
+#hip 24 and 23
+# shoulders 11 and 12
+df_['hip_diff'] = np.abs(df_['xmean24'] - df_['xmean23'])
+df_['shoulder_diff'] = np.abs(df_['xmean11'] - df_['xmean12'])
+df_['torso_length'] = 0.5 *(np.abs(df_['ymean11'] - df_['ymean23']) + np.abs(df_['ymean12'] - df_['ymean24']))
+diff_cols = ['hip_diff', 'shoulder_diff', 'torso_length']
+def plot_f(subplot, i):
+    sns.histplot(df_[diff_cols[i]], ax=subplot)
+    ax.set_title(diff_cols[i])
+    ax.grid(True)
+    
+fig, axes = min_multiple_plot(len(diff_cols), plot_f)
+plt.show()
+# %% Impairment side
+keypoint_side = {'left':[4,5,6,8,10,12,14,16,18,20,22,24,26,28,30,32],
+                 'right':[1,2,3,7,9,11,13,15,17,19,21,23,25,27,29,31]
+                }
+for key, indexes in keypoint_side.items():
+    left_mean_std = df_[[txt+str(i) for txt in ['xstd','ystd'] for i in indexes]].groupby('Patient_Id').mean()
+    print(left_mean_std)
+
 # %%
