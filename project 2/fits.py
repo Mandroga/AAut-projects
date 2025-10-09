@@ -25,55 +25,57 @@ Forest classifier
 Neural classifiers
 '''
 
-# %% df_
-df_ = df.copy()
-
-x_mean_i = [i for i in range(0, 66, 2)]
-y_mean_i = [i for i in range(1, 66, 2)]
-x_std_i = [i for i in range(66, 132, 2)]
-y_std_i = [i for i in range(67, 132, 2)]
-keypoints = list(range(33))
-for i in keypoints:
-    df_[f'xmean{i}'] = df_['Skeleton_Features'].apply(lambda x: x[x_mean_i[i]])
-    df_[f'ymean{i}'] = df_['Skeleton_Features'].apply(lambda x: x[y_mean_i[i]])
-    df_[f'xstd{i}'] = df_['Skeleton_Features'].apply(lambda x: x[x_std_i[i]])
-    df_[f'ystd{i}'] = df_['Skeleton_Features'].apply(lambda x: x[y_std_i[i]])
-df_ = df_.drop(['Skeleton_Features'], axis=1)
-# %% preprocessing
 
 
-def f1_macro_loss(y_true, y_pred, sample_weight):
-    # y_pred is probs for multi:softprob; turn into labels
-    y_pred = np.asarray(y_pred)
-    if y_pred.ndim > 1:
-        y_pred = y_pred.argmax(axis=1)
-    # return a *loss* (lower is better) since older XGB minimizes eval_metric
-    return 1.0 - f1_score(y_true, y_pred, average="macro", sample_weight=sample_weight)
+# %% training data
+#remove_feat_cols = ['Patient_Id', 'target','impairment_side']
+remove_feat_cols = ['Patient_Id', 'target']
+feat_cols = [col for col in df_processed.columns if col not in remove_feat_cols]
+X_ = df_processed[feat_cols]
+y_ = df_processed['target']
+#w = np.array([1]*len(y_))
 
+#if 1: Seperate test patients | else: regular split
+if 1:
+    Patient_Ids = list(range(1,15))
+    Test_Ids = random.sample(Patient_Ids,4)
+    mask = df_processed['Patient_Id'].isin(Train_Ids)
+    X_train = X_[mask]
+    y_train = y_[mask]
+    w_train = w[mask]
 
-indexes = [0, 19,20, 15, 16, 21, 22, 25,26, 31, 32]
-#indexes = list(range(33))
-keypoint_cols = [txt+str(i) for i in indexes for txt in ['xmean','ymean','xstd','ystd']]
-cols = keypoint_cols + ['Patient_Id']
+    X_test = X_[~mask]
+    y_test = y_[~mask]
+    w_test = w[~mask]   
+else:
+    X_train, X_test, y_train, y_test, w_train, w_test = train_test_split(
+        X_, y_, w, test_size=0.2, stratify=y_, random_state=42)
 
-X_ = df_[keypoint_cols]
-y_ = df_['target']
+# %% tts
 
-w = df_[[txt+str(j) for txt in ['xstd','ystd'] for j in [15,16,19,20,21,22]]]
-#stdsc = StandardScaler()
-scaler = MinMaxScaler()
-w = scaler.fit_transform(w.values)
-w =  w.sum(axis=1)
-w *= w
-#sns.histplot(w)
-#plt.show()
+#remove_feat_cols = ['Patient_Id', 'target','impairment_side']
+remove_feat_cols = ['Patient_Id', 'target']
+feat_cols = [col for col in df_processed.columns if col not in remove_feat_cols]
+X_ = df_processed[feat_cols]
+y_ = df_processed['target']
+#w = np.array([1]*len(y_))
 
-# %% train test
+#if 1: Seperate test patients | else: regular split
+if 1:
+    Patient_Ids = list(range(1,15))
+    Test_Ids = random.sample(Patient_Ids,4)
+    mask = df_processed['Patient_Id'].isin(Train_Ids)
+    X_train = X_[mask]
+    y_train = y_[mask]
+    w_train = w[mask]
 
+    X_test = X_[~mask]
+    y_test = y_[~mask]
+    w_test = w[~mask]   
+else:
+    X_train, X_test, y_train, y_test, w_train, w_test = train_test_split(
+        X_, y_, w, test_size=0.2, stratify=y_, random_state=42)
 
-X_train, X_test, y_train, y_test, w_train, w_test = train_test_split(
-    X_, y_, w, test_size=0.2, stratify=y_, random_state=42
-)
 
 # Classifier
 clf = xgb.XGBClassifier(
@@ -97,17 +99,8 @@ clf.fit(
     sample_weight_eval_set=[w_test],
     verbose=False
 )
-# %% score
-y_pred = clf.predict(X_test)
-score = f1_score(y_test, y_pred, average='macro', sample_weight=w_test)
-classification_r = classification_report(y_test, y_pred, sample_weight=w_test)
-print(classification_r)
 
 # %% cv
-X_train, X_test, y_train, y_test, w_train, w_test = train_test_split(
-    X_, y_, w, test_size=0.2, stratify=y_, random_state=42
-)
-
 # ---------------------------
 # 1) Base estimator (no early stopping in CV)
 # ---------------------------
@@ -159,7 +152,7 @@ print("Best params:", opt.best_params_)
 # ---------------------------
 # 3) Final refit with early stopping (no CV leakage)
 # ---------------------------
-# %%
+# %% best model
 X_tr, X_val, y_tr, y_val, w_tr, w_val = train_test_split(
     X_train, y_train, w_train, test_size=0.15, stratify=y_train, random_state=42
 )
@@ -188,4 +181,33 @@ y_pred = final_clf.predict(X_test)
 print("Test F1-macro (unweighted):", f1_score(y_test, y_pred, average="macro"))
 print("Test F1-macro (weighted by w_test):", f1_score(y_test, y_pred, average="macro", sample_weight=w_test))
 print(classification_report(y_test, y_pred, digits=3))
+
+
+# %% score
+
+print(X_test.columns)
+y_pred = clf.predict(X_test)
+score = f1_score(y_test, y_pred, average='macro', sample_weight=w_test)
+classification_r = classification_report(y_test, y_pred, sample_weight=w_test)
+print(classification_r)
+
+# %% confusion matrix
+cm = confusion_matrix(y_test, y_pred)
+
+# If your labels aren't 0..N-1, you can specify label names here:
+labels = sorted(y_.unique())  # or use a custom list like ["class1", "class2", ...]
+
+# Create display
+disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
+
+# Plot with better aesthetics
+fig, ax = plt.subplots(figsize=(8, 6))
+disp.plot(cmap="Blues", values_format=".0f", ax=ax, colorbar=True)
+
+plt.title("Confusion Matrix - XGBoost Model", fontsize=14)
+plt.xlabel("Predicted Label", fontsize=12)
+plt.ylabel("True Label", fontsize=12)
+plt.tight_layout()
+plt.show()
+
 # %%

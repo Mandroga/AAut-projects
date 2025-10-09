@@ -50,6 +50,7 @@ from scipy.spatial.distance import euclidean
 from sklearn.metrics import f1_score, make_scorer, classification_report
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import pickle
+import random
 RANDOM_STATE = 42
 
 
@@ -181,6 +182,15 @@ def overfit_table(df1, df2, metric_names, df_names=['df1', 'df2']):
     
     return overfit_df
 
+def f1_macro_loss(y_true, y_pred, sample_weight):
+    # y_pred is probs for multi:softprob; turn into labels
+    y_pred = np.asarray(y_pred)
+    if y_pred.ndim > 1:
+        y_pred = y_pred.argmax(axis=1)
+    # return a *loss* (lower is better) since older XGB minimizes eval_metric
+    return 1.0 - f1_score(y_true, y_pred, average="macro", sample_weight=sample_weight)
+
+
 class EstimatorWrapper(BaseEstimator, TransformerMixin):
     """Make any estimator appear as a single, non-iterable object to skopt/NumPy."""
     def __init__(self, estimator):
@@ -232,6 +242,59 @@ Y= np.load("Ytrain1.npy")
 df = pd.DataFrame(X)
 df['target'] = Y
 
-df2 = X.copy()
-df2['target'] = Y
-# %%
+# %% df_ - df unpacked
+df_ = df.copy()
+
+x_mean_i = [i for i in range(0, 66, 2)]
+y_mean_i = [i for i in range(1, 66, 2)]
+x_std_i = [i for i in range(66, 132, 2)]
+y_std_i = [i for i in range(67, 132, 2)]
+keypoints = list(range(33))
+for i in keypoints:
+    df_[f'xmean{i}'] = df_['Skeleton_Features'].apply(lambda x: x[x_mean_i[i]])
+    df_[f'ymean{i}'] = df_['Skeleton_Features'].apply(lambda x: x[y_mean_i[i]])
+    df_[f'xstd{i}'] = df_['Skeleton_Features'].apply(lambda x: x[x_std_i[i]])
+    df_[f'ystd{i}'] = df_['Skeleton_Features'].apply(lambda x: x[y_std_i[i]])
+df_ = df_.drop(['Skeleton_Features'], axis=1)
+print(df_.groupby('Patient_Id')['target'].value_counts().unstack())
+
+# %% keypoint parts
+keypoint_side = {'left':[4,5,6,8,10,12,14,16,18,20,22,24,26,28,30,32],
+                 'right':[1,2,3,7,9,11,13,15,17,19,21,23,25,27,29,31]
+                }
+keypoints_hands = [15,16,17,18,19,20,21,22]
+keypoints_right_hand = [16,18,20,22]
+keypoints_left_hand = [15,17,19,21]
+def make_cols(indexes):
+    return [txt + str(i) for i in indexes for txt in ['xmean','ymean','xstd','ystd']]
+side_cols = {k: make_cols(v) for k,v in keypoint_side.items()}
+
+# %% df processed
+indexes = [0, 19,20, 15, 16, 21, 22, 25,26, 31, 32]
+#Nose, R-Finger, L-Finger, R-Thumb, L-Thumb, R-Knee, L-Knee, R-Toe, L-Toe]
+#indexes = list(range(33))
+keypoint_cols = [txt+str(i) for i in indexes for txt in ['xmean','ymean','xstd','ystd']]
+
+#impairment side
+if 1:
+    df_stroke = df_.copy()
+    for patient_id in range(1,15):
+        for key, indexes in keypoint_side.items():
+            cols = [txt + str(i) for txt in ['xstd', 'ystd'] for i in indexes]
+            mask = df_stroke['Patient_Id']==patient_id
+            df_stroke.loc[mask, key + 'std'] = df_stroke[mask][cols].sum().sum()
+    df_stroke['impairment_side'] = (df_stroke['leftstd'] > df_stroke['rightstd']).astype(int)
+    df_['impairment_side'] = df_stroke['impairment_side']
+
+# average hand keypoints for hand feature!
+# normalize knee std and hand std by torso lenght!
+
+df_processed = df_[['Patient_Id'] + keypoint_cols + ['impairment_side','target']].copy()
+
+w = df_[[txt+str(j) for txt in ['xstd','ystd'] for j in [15,16,19,20,21,22]]]
+#stdsc = StandardScaler()
+scaler = MinMaxScaler()
+w = scaler.fit_transform(w.values)
+w =  w.sum(axis=1)
+w *= w
+

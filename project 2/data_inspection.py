@@ -30,6 +30,7 @@ for i in keypoints:
     df_[f'ystd{i}'] = df_['Skeleton_Features'].apply(lambda x: x[y_std_i[i]])
 df_ = df_.drop(['Skeleton_Features'], axis=1)
 
+
 # %% target counts
 #print(df['target'].value_counts())
 
@@ -235,20 +236,80 @@ Scoring/Weights needs to be normalized by patient size
 df_['hip_diff'] = np.abs(df_['xmean24'] - df_['xmean23'])
 df_['shoulder_diff'] = np.abs(df_['xmean11'] - df_['xmean12'])
 df_['torso_length'] = 0.5 *(np.abs(df_['ymean11'] - df_['ymean23']) + np.abs(df_['ymean12'] - df_['ymean24']))
+
 diff_cols = ['hip_diff', 'shoulder_diff', 'torso_length']
-def plot_f(subplot, i):
-    sns.histplot(df_[diff_cols[i]], ax=subplot)
+def plot_f(ax, i):
+    sns.histplot(df_[diff_cols[i]], ax=ax, kde=True)
     ax.set_title(diff_cols[i])
     ax.grid(True)
-    
-fig, axes = min_multiple_plot(len(diff_cols), plot_f)
+#fig, axes = min_multiple_plot(len(diff_cols), plot_f)
+
+hand_parts = {'lthumb':21, 'rthumb':22,'lindex':19,'rindex':20,'lpinky':17,'rpinky':18,'lwrist':15,'rwrist':16}
+keypoint_handpart = {v:k for k,v in hand_parts.items()}
+hand_diff_cols = []
+for key, item in hand_parts.items():
+    col = 'lmouth_'+key+'_diff'
+    df_[col] = np.abs(df_['ymean9'] - df_['ymean'+str(item)])
+    hand_diff_cols.append(col)
+
+for key, item in hand_parts.items():
+    col = 'rmouth_'+key+'_diff'
+    df_[col] = np.abs(df_['ymean10'] - df_['ymean'+str(item)])
+    hand_diff_cols.append(col)
+
+def plot_f(ax, i):
+    sns.violinplot(data=df_, ax=ax, x='target', y=hand_diff_cols[i])
+    ax.set_title(hand_diff_cols[i])
+    ax.grid(True)
+#fig, axes = min_multiple_plot(len(hand_diff_cols), plot_f)
+
+
+
+def plot_f(ax, i):
+    key = list(hand_parts.keys())[i]
+    y_col = f'ystd{hand_parts[key]}'
+    sns.violinplot(data=df_, ax=ax, x='target', y=y_col)
+    ax.set_title(key + ' ystd')
+    ax.grid(True)
+fig, axes = min_multiple_plot(len(hand_parts.keys()), plot_f)
+
+def plot_f(ax, i):
+    key = list(hand_parts.keys())[i]
+    y_col = f'xstd{hand_parts[key]}'
+    sns.violinplot(data=df_, ax=ax, x='target', y=y_col)
+    ax.set_title(key + ' xstd')
+    ax.grid(True)
+fig, axes = min_multiple_plot(len(hand_parts.keys()), plot_f)
+
+
 plt.show()
 # %% Impairment side
-keypoint_side = {'left':[4,5,6,8,10,12,14,16,18,20,22,24,26,28,30,32],
-                 'right':[1,2,3,7,9,11,13,15,17,19,21,23,25,27,29,31]
-                }
-for key, indexes in keypoint_side.items():
-    left_mean_std = df_[[txt+str(i) for txt in ['xstd','ystd'] for i in indexes]].groupby('Patient_Id').mean()
-    print(left_mean_std)
 
+df_stroke = df_.copy()
+for patient_id in range(1,15):
+    for key, indexes in keypoint_side.items():
+        cols = [txt + str(i) for txt in ['xstd', 'ystd'] for i in indexes]
+        mask = df_stroke['Patient_Id']==patient_id
+        df_stroke.loc[mask, key + 'std'] = df_stroke[mask][cols].sum().sum()
+    
+
+df_stroke['impairment_side'] = (df_stroke['leftstd'] > df_stroke['rightstd']).astype(int)
+print(df_stroke[['Patient_Id','leftstd','rightstd','impairment_side']].drop_duplicates().sort_values(by='Patient_Id'))
+
+df_long = df_stroke[['Patient_Id', 'leftstd', 'rightstd']].drop_duplicates()
+df_long = (
+    df_long
+    .melt(id_vars='Patient_Id', 
+          value_vars=['leftstd', 'rightstd'], 
+          var_name='side', 
+          value_name='std')
+)
+
+# Optional: clean up the 'side' column (remove the 'std' suffix)
+df_long['side'] = df_long['side'].str.replace('std', '')
+fig, axes = bar_plot(df_long, X='Patient_Id', y='std', label='side')
+plt.show()
+'''
+Clear seperation of std values on left and right which most likely indicates impairment side!
+'''
 # %%
