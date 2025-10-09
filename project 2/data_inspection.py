@@ -242,7 +242,7 @@ def plot_f(ax, i):
     sns.histplot(df_[diff_cols[i]], ax=ax, kde=True)
     ax.set_title(diff_cols[i])
     ax.grid(True)
-#fig, axes = min_multiple_plot(len(diff_cols), plot_f)
+fig, axes = min_multiple_plot(len(diff_cols), plot_f)
 
 hand_parts = {'lthumb':21, 'rthumb':22,'lindex':19,'rindex':20,'lpinky':17,'rpinky':18,'lwrist':15,'rwrist':16}
 keypoint_handpart = {v:k for k,v in hand_parts.items()}
@@ -261,7 +261,7 @@ def plot_f(ax, i):
     sns.violinplot(data=df_, ax=ax, x='target', y=hand_diff_cols[i])
     ax.set_title(hand_diff_cols[i])
     ax.grid(True)
-#fig, axes = min_multiple_plot(len(hand_diff_cols), plot_f)
+fig, axes = min_multiple_plot(len(hand_diff_cols), plot_f)
 
 
 
@@ -312,4 +312,18 @@ plt.show()
 '''
 Clear seperation of std values on left and right which most likely indicates impairment side!
 '''
+# %% face
+#indexes = {'left':[1,2,3,7,9], 'right':[4,5,6,8,10]}
+indexes = {'left':[], 'right':[], 'center':[0]}
+left_face_cols = make_cols(indexes['left'])
+right_face_cols = make_cols(indexes['right'])
+center_face_cols = make_cols(indexes['center'])
+face_df = df_[left_face_cols + right_face_cols + center_face_cols + ['Patient_Id', 'target']].copy()
+#face_df = face_df[face_df['Patient_Id']==1]
+xmean_cols = [col for col in face_df.columns if 'xmean' in col]
+ymean_cols = [col for col in face_df.columns if 'ymean' in col]
+for i in range(len(xmean_cols)):
+    sns.scatterplot(data=face_df, x=xmean_cols[i], y=ymean_cols[i], hue='target')
+plt.show()
+
 # %%
