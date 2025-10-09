@@ -342,7 +342,7 @@ class FeatureTransform(BaseEstimator, TransformerMixin):
         # order the output columns deterministically
         out_cols = hand_cols_out + diff_cols_out + knee_std_cols + std_cols_out + ['torso_length']
         print(out_cols)
-        return X[out_cols]
+        return X[out_cols].to_numpy()
 
     def get_feature_names_out(self, input_features=None):
         # reflect exactly what transform outputs
@@ -351,6 +351,153 @@ class FeatureTransform(BaseEstimator, TransformerMixin):
         # fallback
         return np.array(input_features if input_features is not None else [], dtype=object)# %% metrics
 
+class FeatureTransform_np(BaseEstimator, TransformerMixin):
+    """
+    Input X: numpy array with columns in the order:
+      [xmean0, ymean0, xstd0, ystd0, xmean1, ymean1, xstd1, ystd1, ..., xmean32, ymean32, xstd32, ystd32]
+
+    Adds:
+      1) Hand-averaged features for ('left','right') across indices in self.keypoints_hands
+         -> xmean{key}_hand, ymean{key}_hand, xstd{key}_hand, ystd{key}_hand
+      2) Diff features for given pairs (normalized by torso_length):
+         -> {component}diff{a}-{b}  for comp in ('xmean','ymean') and (a,b) in self.diff_pairs
+            where a/b ∈ {int joint index, 'left_hand', 'right_hand'}
+      3) Aggregate stds over left/right sides: left_std, right_std
+      4) Torso length = mean of sqrt((11-23)^2) and sqrt((12-24)^2) using xmean/ymean
+      5) Passthrough knee stds: xstd25, ystd25, xstd26, ystd26
+
+    Returns: numpy array with columns in a stable, documented order
+    """
+
+    def __init__(self):
+        # joint indices (0..32)
+        self.keypoint_side = {
+            'left':  [4,5,6,8,10,12,14,16,18,20,22,24,26,28,30,32],
+            'right': [1,2,3,7,9,11,13,15,17,19,21,23,25,27,29,31]
+        }
+        self.keypoints_hands = {'left': [15,17,19,21], 'right': [16,18,20,22]}
+        self.diff_pairs = ((25,23), (26,24), (27,23),(28,24), ('left_hand', 0), ('right_hand', 0), ('left_hand', 11), ('right_hand', 12), (13,0), (14,0), (13,11), (14,12))
+        self.components_hand = ('xmean','ymean','xstd','ystd')
+        self.components_diff = ('xmean','ymean')
+
+        # internal
+        self._comp_offsets = {'xmean': 0, 'ymean': 1, 'xstd': 2, 'ystd': 3}
+        self.n_joints_expected = 33  # 0..32
+
+        self.output_features_ = None
+
+    # --------- helpers on numpy layout ----------
+    def _view_comp(self, X, comp):
+        """Return view of component comp with shape (n_samples, n_joints)."""
+        off = self._comp_offsets[comp]
+        # pick every 4th column starting at component offset
+        V = X[:, off::4]
+        # in case there are extra columns, keep the first n_joints_expected
+        return V[:, :self.n_joints_expected]
+
+    def _hand_feature_names(self):
+        return [f"{comp}{key}_hand"
+                for key in ('left','right')
+                for comp in self.components_hand]
+
+    def _diff_feature_names(self):
+        return [f"{comp}diff{a}-{b}"
+                for (a,b) in self.diff_pairs
+                for comp in self.components_diff]
+
+    def _knee_std_cols(self):
+        return [f"{c}{i}" for i in (25, 26) for c in ('xstd','ystd')]
+
+    def fit(self, X, y=None):
+        # validate shape
+        if X.ndim != 2 or X.shape[1] < self.n_joints_expected * 4:
+            raise ValueError(
+                f"Expected at least {self.n_joints_expected*4} columns (got {X.shape[1]}). "
+                "Columns must be [xmean0,ymean0,xstd0,ystd0, ..., xmean32,ymean32,xstd32,ystd32]."
+            )
+
+        # define output names (order matches transform stacking)
+        hand_cols = self._hand_feature_names()
+        diff_cols = self._diff_feature_names()
+        knee_cols = self._knee_std_cols()
+        std_cols  = ['left_std', 'right_std']
+        others    = ['torso_length']
+        self.output_features_ = hand_cols + diff_cols + knee_cols + std_cols + others
+        return self
+
+    def transform(self, X):
+        if X.ndim != 2:
+            raise ValueError("X must be 2D NumPy array.")
+
+        # views by component (shape: n_samples x n_joints)
+        Xm = self._view_comp(X, 'xmean')
+        Ym = self._view_comp(X, 'ymean')
+        Xs = self._view_comp(X, 'xstd')
+        Ys = self._view_comp(X, 'ystd')
+
+        n = X.shape[0]
+
+        # 1) Hand averages
+        def hand_avg(comp_mat, idxs):
+            return comp_mat[:, idxs].mean(axis=1)
+
+        hand_feats = []
+        # order: for key in ('left','right'), for comp in components_hand
+        for key, idxs in (('left', self.keypoints_hands['left']), ('right', self.keypoints_hands['right'])):
+            hand_feats.extend([
+                hand_avg(Xm, idxs),  # xmean{key}_hand
+                hand_avg(Ym, idxs),  # ymean{key}_hand
+                hand_avg(Xs, idxs),  # xstd{key}_hand
+                hand_avg(Ys, idxs),  # ystd{key}_hand
+            ])
+        # unpack for diff usage
+        hand_dict = {
+            'left':  {'xmean': hand_feats[0], 'ymean': hand_feats[1], 'xstd': hand_feats[2], 'ystd': hand_feats[3]},
+            'right': {'xmean': hand_feats[4], 'ymean': hand_feats[5], 'xstd': hand_feats[6], 'ystd': hand_feats[7]},
+        }
+
+        # 2) Torso length (avg of the two diagonals)
+        # joints: (11,23) and (12,24)
+        left_torso  = np.sqrt((Xm[:,11] - Xm[:,23])**2 + (Ym[:,11] - Ym[:,23])**2)
+        right_torso = np.sqrt((Xm[:,12] - Xm[:,24])**2 + (Ym[:,12] - Ym[:,24])**2)
+        torso_length = (left_torso + right_torso) / 2.0
+        # avoid divide-by-zero
+        denom = np.where(torso_length == 0.0, np.nan, torso_length)
+
+        # 3) Diffs (xmean/ymean), normalized by torso_length
+        def ref_values(comp, ref):
+            if isinstance(ref, str):
+                if ref == 'left_hand':
+                    return hand_dict['left'][comp]
+                elif ref == 'right_hand':
+                    return hand_dict['right'][comp]
+                else:
+                    raise ValueError(f"Unknown ref '{ref}'")
+            # int joint index
+            return (Xm if comp == 'xmean' else Ym)[:, ref]
+
+        diff_feats = []
+        for a, b in self.diff_pairs:
+            for comp in self.components_diff:
+                va = ref_values(comp, a)
+                vb = ref_values(comp, b)
+                diff_feats.append((va - vb) / denom)
+
+        # 4) Aggregate stds over left/right sides
+        left_std  = Xs[:, self.keypoint_side['left']].sum(axis=1) + Ys[:, self.keypoint_side['left']].sum(axis=1)
+        right_std = Xs[:, self.keypoint_side['right']].sum(axis=1) + Ys[:, self.keypoint_side['right']].sum(axis=1)
+
+        # 5) Knee std passthrough (xstd25, ystd25, xstd26, ystd26)
+        knee_std = [Xs[:,25], Ys[:,25], Xs[:,26], Ys[:,26]]
+
+        # Stack in the documented order
+        out_blocks = hand_feats + diff_feats + knee_std + [left_std, right_std] + [torso_length]
+        # each block is shape (n,), stack to (n, n_features)
+        return np.column_stack(out_blocks).astype(float)
+
+    def get_feature_names_out(self, input_features=None):
+        return np.array(self.output_features_, dtype=object)
+#metrics
 if 1:    
     metrics = [mean_squared_error, mean_absolute_percentage_error, winsorized_mape, r2_score]
     metric_names = ['MSE', 'MAPE', 'wMAPE','R2']   

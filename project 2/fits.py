@@ -27,13 +27,13 @@ Neural classifiers
 
 
 
-# %% training data
+# %% training data df
 #remove_feat_cols = ['Patient_Id', 'target','impairment_side']
 remove_feat_cols = ['Patient_Id', 'target']
 feat_cols = [col for col in df_.columns if col not in remove_feat_cols]
 
-X_ = df_[feat_cols]
-y_ = df_['target']
+X_ = df_[feat_cols].to_numpy()
+y_ = df_['target'].to_numpy()
 #w = np.array([1]*len(y_))
 
 groups_all = df_processed['Patient_Id']
@@ -44,24 +44,39 @@ gss = GroupShuffleSplit(test_size=0.25, n_splits=1, random_state=42)
 
 train_idx, test_idx = next(gss.split(X_, y_, groups=groups_all))
 
-X_train, X_test= X_.iloc[train_idx], X_.iloc[test_idx]
-y_train, y_test = y_.iloc[train_idx], y_.iloc[test_idx]
+X_train, X_test= X_[train_idx], X_[test_idx]
+y_train, y_test = y_[train_idx], y_[test_idx]
+w_train, w_test = w[train_idx], w[test_idx]
+groups_train = groups_all[train_idx]
+
+n_iter = 10
+
+# %% Training data numpy
+
+
+groups_all = X['Patient_Id']
+X_ = np.array(X['Skeleton_Features'].to_list())
+print(X_.shape)
+sgkf = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
+
+gss = GroupShuffleSplit(test_size=0.25, n_splits=1, random_state=42)
+
+train_idx, test_idx = next(gss.split(X_, Y, groups=groups_all))
+
+X_train, X_test= X_[train_idx], X_[test_idx]
+y_train, y_test = Y[train_idx], Y[test_idx]
 w_train, w_test = w[train_idx], w[test_idx]
 groups_train = groups_all[train_idx]
 
 n_iter = 10
 # %% Grouped CV
-
 clf = xgb.XGBClassifier(
     objective="multi:softprob",
-    num_class=int(y_.nunique()),
-    tree_method="hist",     # switch to "gpu_hist" if you have a CUDA GPU
     random_state=42,
     eval_metric='mlogloss',  # CV uses macro-F1 via scoring; leave booster metric here
-    early_stopping_rounds=None,  # no early stopping in CV
 )
 
-model = Pipeline([('features',FeatureTransform()),('clf', clf)])
+model = Pipeline([('features',FeatureTransform_np()),('clf', clf)])
 
 # ---------------------------
 # 2) Search space + CV
