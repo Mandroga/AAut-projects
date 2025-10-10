@@ -354,7 +354,8 @@ class FeatureTransform(BaseEstimator, TransformerMixin):
 class FeatureTransform_np(BaseEstimator, TransformerMixin):
     """
     Input X: numpy array with columns in the order:
-      [xmean0, ymean0, xstd0, ystd0, xmean1, ymean1, xstd1, ystd1, ..., xmean32, ymean32, xstd32, ystd32]
+      [xmean0, ymean0, xmean1, ymean1, ..., xmean32, ymean32,
+       xstd0,  ystd0,  xstd1,  ystd1,  ..., xstd32,  ystd32]
 
     Adds:
       1) Hand-averaged features for ('left','right') across indices in self.keypoints_hands
@@ -376,24 +377,49 @@ class FeatureTransform_np(BaseEstimator, TransformerMixin):
             'right': [1,2,3,7,9,11,13,15,17,19,21,23,25,27,29,31]
         }
         self.keypoints_hands = {'left': [15,17,19,21], 'right': [16,18,20,22]}
-        self.diff_pairs = ((25,23), (26,24), (27,23),(28,24), ('left_hand', 0), ('right_hand', 0), ('left_hand', 11), ('right_hand', 12), (13,0), (14,0), (13,11), (14,12))
+        self.diff_pairs = (
+            (25,23), (26,24), (27,23), (28,24),
+            ('left_hand', 0), ('right_hand', 0),
+            ('left_hand', 11), ('right_hand', 12),
+            (13,0), (14,0), (13,11), (14,12)
+        )
         self.components_hand = ('xmean','ymean','xstd','ystd')
         self.components_diff = ('xmean','ymean')
 
-        # internal
-        self._comp_offsets = {'xmean': 0, 'ymean': 1, 'xstd': 2, 'ystd': 3}
         self.n_joints_expected = 33  # 0..32
-
         self.output_features_ = None
 
     # --------- helpers on numpy layout ----------
+    def _split_blocks(self, X):
+        """Return (means_block, stds_block), each shape (n_samples, 2*n_joints)."""
+        nJ = self.n_joints_expected
+        if X.shape[1] < 4*nJ:
+            raise ValueError(
+                f"Expected at least {4*nJ} columns (got {X.shape[1]}). "
+                "Columns must be [xmean0,ymean0,...,xmean32,ymean32, xstd0,ystd0,...,xstd32,ystd32]."
+            )
+        means_block = X[:, :2*nJ]
+        stds_block  = X[:, 2*nJ:2*nJ+2*nJ]  # keep exactly 2*nJ for stds
+        return means_block, stds_block
+
     def _view_comp(self, X, comp):
-        """Return view of component comp with shape (n_samples, n_joints)."""
-        off = self._comp_offsets[comp]
-        # pick every 4th column starting at component offset
-        V = X[:, off::4]
-        # in case there are extra columns, keep the first n_joints_expected
-        return V[:, :self.n_joints_expected]
+        """
+        Return view of a component with shape (n_samples, n_joints) under the layout:
+        [xmean,ymean]*nJ | [xstd,ystd]*nJ
+        """
+        nJ = self.n_joints_expected
+        means_block, stds_block = self._split_blocks(X)
+
+        if comp == 'xmean':
+            return means_block[:, 0::2][:, :nJ]
+        elif comp == 'ymean':
+            return means_block[:, 1::2][:, :nJ]
+        elif comp == 'xstd':
+            return stds_block[:, 0::2][:, :nJ]
+        elif comp == 'ystd':
+            return stds_block[:, 1::2][:, :nJ]
+        else:
+            raise ValueError(f"Unknown component '{comp}'")
 
     def _hand_feature_names(self):
         return [f"{comp}{key}_hand"
@@ -410,10 +436,11 @@ class FeatureTransform_np(BaseEstimator, TransformerMixin):
 
     def fit(self, X, y=None):
         # validate shape
-        if X.ndim != 2 or X.shape[1] < self.n_joints_expected * 4:
+        nJ = self.n_joints_expected
+        if X.ndim != 2 or X.shape[1] < 4*nJ:
             raise ValueError(
-                f"Expected at least {self.n_joints_expected*4} columns (got {X.shape[1]}). "
-                "Columns must be [xmean0,ymean0,xstd0,ystd0, ..., xmean32,ymean32,xstd32,ystd32]."
+                f"Expected at least {4*nJ} columns (got {X.shape[1]}). "
+                "Columns must be [xmean0,ymean0,...,xmean32,ymean32, xstd0,ystd0,...,xstd32,ystd32]."
             )
 
         # define output names (order matches transform stacking)
@@ -435,33 +462,29 @@ class FeatureTransform_np(BaseEstimator, TransformerMixin):
         Xs = self._view_comp(X, 'xstd')
         Ys = self._view_comp(X, 'ystd')
 
-        n = X.shape[0]
-
         # 1) Hand averages
         def hand_avg(comp_mat, idxs):
             return comp_mat[:, idxs].mean(axis=1)
 
         hand_feats = []
-        # order: for key in ('left','right'), for comp in components_hand
-        for key, idxs in (('left', self.keypoints_hands['left']), ('right', self.keypoints_hands['right'])):
+        for key, idxs in (('left', self.keypoints_hands['left']),
+                          ('right', self.keypoints_hands['right'])):
             hand_feats.extend([
                 hand_avg(Xm, idxs),  # xmean{key}_hand
                 hand_avg(Ym, idxs),  # ymean{key}_hand
                 hand_avg(Xs, idxs),  # xstd{key}_hand
                 hand_avg(Ys, idxs),  # ystd{key}_hand
             ])
-        # unpack for diff usage
+
         hand_dict = {
             'left':  {'xmean': hand_feats[0], 'ymean': hand_feats[1], 'xstd': hand_feats[2], 'ystd': hand_feats[3]},
             'right': {'xmean': hand_feats[4], 'ymean': hand_feats[5], 'xstd': hand_feats[6], 'ystd': hand_feats[7]},
         }
 
-        # 2) Torso length (avg of the two diagonals)
-        # joints: (11,23) and (12,24)
+        # 2) Torso length (avg of the two diagonals): joints (11,23) and (12,24)
         left_torso  = np.sqrt((Xm[:,11] - Xm[:,23])**2 + (Ym[:,11] - Ym[:,23])**2)
         right_torso = np.sqrt((Xm[:,12] - Xm[:,24])**2 + (Ym[:,12] - Ym[:,24])**2)
         torso_length = (left_torso + right_torso) / 2.0
-        # avoid divide-by-zero
         denom = np.where(torso_length == 0.0, np.nan, torso_length)
 
         # 3) Diffs (xmean/ymean), normalized by torso_length
@@ -492,12 +515,10 @@ class FeatureTransform_np(BaseEstimator, TransformerMixin):
 
         # Stack in the documented order
         out_blocks = hand_feats + diff_feats + knee_std + [left_std, right_std] + [torso_length]
-        # each block is shape (n,), stack to (n, n_features)
         return np.column_stack(out_blocks).astype(float)
 
     def get_feature_names_out(self, input_features=None):
-        return np.array(self.output_features_, dtype=object)
-#metrics
+        return np.array(self.output_features_, dtype=object)#metrics
 if 1:    
     metrics = [mean_squared_error, mean_absolute_percentage_error, winsorized_mape, r2_score]
     metric_names = ['MSE', 'MAPE', 'wMAPE','R2']   
@@ -586,16 +607,6 @@ df_processed = df_processed[['Patient_Id'] + hand_cols + diff_cols + knee_std_co
 if 1:
     w = df_processed[[txt+str(j) for txt in ['xstd','ystd'] for j in ['left_hand','right_hand',25,26]]].copy()
     scaler = MinMaxScaler()
-    w2 = w.div(torso_length, axis=0)
-
-
-    for i, wi in enumerate([w,w2]):
-        wi = scaler.fit_transform(wi.values)
-        wi =  wi.sum(axis=1)
-        wi *= wi
-        wi = wi / wi.max()
-       # sns.histplot(wi)
-   # plt.show()~
     w.div(torso_length, axis=0)
     w = scaler.fit_transform(w.values)
     w =  w.sum(axis=1)
