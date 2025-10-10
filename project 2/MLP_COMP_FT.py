@@ -322,7 +322,7 @@ from sklearn.svm import SVC
 
 pipe_SVM = Pipeline([
     ('my_pre_processing', PreProcessing()),
-    ('features',FeatureTransform_np())
+    ('features',FeatureTransform_np()),
     ('scaler', StandardScaler()),
     ('svm', SVC())
     ])

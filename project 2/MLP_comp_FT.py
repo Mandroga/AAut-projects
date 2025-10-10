@@ -9,6 +9,8 @@
 
 import pickle
 
+from data_imports import FeatureTransform_np
+
 path = "Xtrain1.pkl"
 with open(path, "rb") as f:
     X_df = pickle.load(f)
@@ -16,11 +18,24 @@ with open(path, "rb") as f:
 X = np.stack(X_df["Skeleton_Features"].values)
 Y = np.load("Ytrain1.npy")
 #%%
+X = df["Skeleton_Features"].values   # or df.drop(columns=["label", "patient_id"]) if using tabular features
+y = df["target"].values
+groups = df["Patient_Id"].values
 
+from sklearn.model_selection import StratifiedGroupKFold
+
+sgkf = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
+
+for fold, (train_idx, test_idx) in enumerate(sgkf.split(X, y, groups)):
+    X_train, X_test = X[train_idx], X[test_idx]
+    y_train, y_test = y[train_idx], y[test_idx]
+
+
+#%%
 n1 = 12
 n2 = 4
 
-df_train = df2[df2["Patient_Id"] != n1]
+df_train = df[df["Patient_Id"] != n1]
 df_train = df_train[df_train["Patient_Id"] != n2]
 
 X_train = np.array(df_train['Skeleton_Features'].to_list())
@@ -293,6 +308,7 @@ class PreProcessing(BaseEstimator, TransformerMixin):
 
 pipe = Pipeline([
     ('my_pre_processing', PreProcessing()),
+    ('features',FeatureTransform_np()),
     ('scaler', StandardScaler()),
     ('mlp', MLPClassifier(max_iter=500, random_state=RANDOM_STATE, early_stopping=True,validation_fraction=0.1))
 ])
@@ -322,7 +338,7 @@ from sklearn.svm import SVC
 
 pipe_SVM = Pipeline([
     ('my_pre_processing', PreProcessing()),
-    ('features',FeatureTransform()),
+    ('features',FeatureTransform_np()),
     ('scaler', StandardScaler()),
     ('svm', SVC())
     ])
