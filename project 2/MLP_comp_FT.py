@@ -28,15 +28,21 @@ sgkf = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
 
 for fold, (train_idx, test_idx) in enumerate(sgkf.split(X, y, groups)):
     X_train, X_test = X[train_idx], X[test_idx]
-    y_train, y_test = y[train_idx], y[test_idx]
+    y_train, y_test = y[train_idx], y[test_idx]    
+    print(f"Fold {fold}:")
+    print("  Train patients:", df.loc[train_idx, "Patient_Id"].unique())
+    print("  Test patients:", df.loc[test_idx, "Patient_Id"].unique())
+
 
 
 #%%
 n1 = 12
 n2 = 4
+n3= 1
 
 df_train = df[df["Patient_Id"] != n1]
 df_train = df_train[df_train["Patient_Id"] != n2]
+df_train = df_train[df_train["Patient_Id"] != n3]
 
 X_train = np.array(df_train['Skeleton_Features'].to_list())
 
@@ -344,11 +350,14 @@ pipe_SVM = Pipeline([
     ])
 
 param_grid_SVM = {
-    'svm__C': [0.1, 1, 10],
+    'svm__C': [1, 10, 11, 12, 9],
     'svm__kernel': ['linear', 'rbf', 'poly'],
     'svm__gamma': ['scale', 'auto', 0.01, 0.1],
     'svm__degree': [2, 3],
-    'svm__class_weight': [None, 'balanced']
+    'svm__class_weight': [None, 'balanced'],
+    'svm__shrinking': [True, False],
+    'svm__tol': [5e-3, 1e-3, 5e-4, 1e-4],
+    'svm__coef0': [0, 0.5, 1],
 }
 
 grid_SVM = GridSearchCV(pipe_SVM, param_grid_SVM, cv=5, n_jobs=-1, verbose=1, scoring='f1_macro')
