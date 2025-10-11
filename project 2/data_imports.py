@@ -13,44 +13,27 @@ import importlib
 import tools
 importlib.reload(tools) 
 from tools import *
-from sklearn.preprocessing import PolynomialFeatures
-from sklearn.linear_model import LinearRegression
 from sklearn.pipeline import Pipeline
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error, mean_absolute_percentage_error, r2_score
-from sklearn.linear_model import Ridge, Lasso
-import itertools
-from sklearn.feature_selection import RFECV, RFE
-from sklearn.model_selection import KFold, cross_val_score, StratifiedGroupKFold, GroupShuffleSplit
-from sklearn.cross_decomposition import PLSRegression
+from sklearn.feature_selection import RFECV
+from sklearn.model_selection import StratifiedGroupKFold, GroupShuffleSplit
 from skopt import BayesSearchCV
 from skopt.space import Real, Integer, Categorical
 from sklearn.feature_selection import mutual_info_regression, mutual_info_classif
-from sklearn.feature_selection import VarianceThreshold
-from sklearn.model_selection import ParameterGrid
 from scipy.stats import trim_mean
 from sklearn.base import BaseEstimator, TransformerMixin, clone
 import joblib
-from sklearn.decomposition import PCA
-from sklearn.model_selection import GridSearchCV
 from sklearn.ensemble import IsolationForest    
-from sklearn.decomposition import PCA
-from sklearn.svm import SVR
-from sklearn.cluster import KMeans
-from sklearn.preprocessing import RobustScaler
 import os
-import datetime
 import xgboost as xgb
-from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold
-from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.neural_network import MLPClassifier
-from sklearn.metrics import classification_report, confusion_matrix
 from scipy.spatial.distance import euclidean
 from sklearn.metrics import f1_score, make_scorer, classification_report
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import pickle
 import random
+from skopt.space import Space
+from sklearn.svm import SVC
 RANDOM_STATE = 42
 
 
@@ -519,10 +502,114 @@ class FeatureTransform_np(BaseEstimator, TransformerMixin):
 
     def get_feature_names_out(self, input_features=None):
         return np.array(self.output_features_, dtype=object)#metrics
-if 1:    
-    metrics = [mean_squared_error, mean_absolute_percentage_error, winsorized_mape, r2_score]
-    metric_names = ['MSE', 'MAPE', 'wMAPE','R2']   
 
+class FeatureTransform2(BaseEstimator, TransformerMixin):
+    def __init__(self):
+        self.keypoint_side = {'l':[0, 4,5,6,8,10,12,14,16,18,20,22,24,26,28,30,32],
+                 'r':[1,2,3,7,9,11,13,15,17,19,21,23,25,27,29,31]}
+        self.keypoint_nose = 0
+        self.keypoint_knees = {'l':26, 'r':25}
+        self.keypoints_torso = {'l':[11,23],'r':[12,24]}
+        self.keypoints_hands = {'l': [15,17,19,21], 'r': [16,18,20,22]}
+
+        self.x_mean_i = [i for i in range(0, 66, 2)]
+        self.y_mean_i = [i for i in range(1, 66, 2)]
+        self.x_std_i = [i for i in range(66, 132, 2)]
+        self.y_std_i = [i for i in range(67, 132, 2)]
+
+    def _make_cols(self, indexes, components=['xmean','ymean','xstd','ystd']):
+        return [txt + str(i) for i in indexes for txt in components]
+
+    def fit(self, X, y=None):
+        return self
+    def transform(self, X):
+        #make df
+        col_names = [c+str(i) for i in range(33) for c in ['xmean','ymean']] + [c+str(i) for i in range(33) for c in ['xstd','ystd']]
+        df_ft = pd.DataFrame(X, columns=col_names)
+
+        #normalize skeleton
+        if 1:
+            for key, side_indexes in self.keypoint_side.items():
+                x_cols = self._make_cols(side_indexes, components=['xmean','xstd'])
+                y_cols = self._make_cols(side_indexes, components=['ymean','ystd'])
+                if key == 'l':
+                    df_ft.loc[:,x_cols] = df_ft[x_cols].to_numpy() / np.abs(df_ft['xmean11'].to_numpy().reshape(len(df_ft),-1))
+                    df_ft.loc[:,y_cols] = df_ft[y_cols].to_numpy() / np.abs(df_ft['ymean11'].to_numpy().reshape(len(df_ft),-1))
+                else:
+                    df_ft.loc[:,x_cols] = df_ft[x_cols].to_numpy() / np.abs(df_ft['xmean12'].to_numpy().reshape(len(df_ft),-1))
+                    df_ft.loc[:,y_cols] = df_ft[y_cols].to_numpy() / np.abs(df_ft['ymean12'].to_numpy().reshape(len(df_ft),-1))
+        
+        #side std
+        if 1:
+            for key, side_indexes in self.keypoint_side.items():
+                x_cols = self._make_cols(side_indexes, components=['xstd'])
+                y_cols = self._make_cols(side_indexes, components=['ystd'])
+                df_ft[key + 'std'] = df_ft[x_cols + y_cols].sum(axis=1)
+
+
+        return df_ft
+
+class FeatureTransform3(BaseEstimator, TransformerMixin):
+    def __init__(self):
+        self.keypoint_side = {'r':[4,5,6,8,10,12,14,16,18,20,22,24,26,28,30,32],
+                 'l':[0,1,2,3,7,9,11,13,15,17,19,21,23,25,27,29,31]}
+
+        self.x_mean_i = [i for i in range(0, 66, 2)]
+        self.y_mean_i = [i for i in range(1, 66, 2)]
+        self.x_std_i = [i for i in range(66, 132, 2)]
+        self.y_std_i = [i for i in range(67, 132, 2)]
+
+    def _make_cols(self, indexes, components=['xmean','ymean','xstd','ystd']):
+        return [txt + str(i) for i in indexes for txt in components]
+
+    def fit(self, X, y=None):
+        return self
+    def transform(self, X):
+        #make df
+        col_names = [c+str(i) for i in range(33) for c in ['xmean','ymean']] + [c+str(i) for i in range(33) for c in ['xstd','ystd']]
+        df_ft = pd.DataFrame(X, columns=col_names)
+
+        #invert y
+        if 1:
+            ymean_cols = [col for col in df_ft.columns if 'ymean' in col]
+            df_ft.loc[:, ymean_cols] = -1* df_ft[ymean_cols]
+        #center skeleton
+        if 0:
+            xmean_cols = [col for col in df_ft.columns if 'xmean' in col]
+            ymean_cols = [col for col in df_ft.columns if 'ymean' in col]
+            xtorso_cols = self._make_cols([11,12,23,24], components=['xmean'])
+            ytorso_cols = self._make_cols([11,12,23,24], components=['ymean'])
+            cx = df_ft[xtorso_cols].mean(axis=1).to_numpy().reshape(len(df_ft),1)
+            cy = df_ft[ytorso_cols].mean(axis=1).to_numpy().reshape(len(df_ft),1)
+            df_ft.loc[:, xmean_cols] = df_ft[xmean_cols].to_numpy() - cx
+            df_ft.loc[:, ymean_cols] = df_ft[ymean_cols].to_numpy() - cy
+        #normalize skeleton
+        if 0:
+            for key, side_indexes in self.keypoint_side.items():
+                x_cols = self._make_cols(side_indexes, components=['xmean','xstd'])
+                y_cols = self._make_cols(side_indexes, components=['ymean','ystd'])
+                if key == 'l':
+                    df_ft.loc[:,x_cols] = df_ft[x_cols].to_numpy() / np.abs((df_ft['xmean11']-df_ft['xmean12']).to_numpy().reshape(len(df_ft),-1))
+                    df_ft.loc[:,y_cols] = df_ft[y_cols].to_numpy() / np.abs((df_ft['ymean11']-df_ft['ymean23']).to_numpy().reshape(len(df_ft),-1))
+                else:
+                    df_ft.loc[:,x_cols] = df_ft[x_cols].to_numpy() / np.abs((df_ft['xmean12']-df_ft['xmean11']).to_numpy().reshape(len(df_ft),-1))
+                    df_ft.loc[:,y_cols] = df_ft[y_cols].to_numpy() / np.abs((df_ft['ymean12']-df_ft['ymean24']).to_numpy().reshape(len(df_ft),-1))
+
+        #side std
+        if 1:
+            for key, side_indexes in self.keypoint_side.items():
+                x_cols = self._make_cols(side_indexes, components=['xstd'])
+                y_cols = self._make_cols(side_indexes, components=['ystd'])
+                df_ft[key + 'std'] = df_ft[x_cols + y_cols].sum(axis=1)
+
+        #only one side
+        if 0:
+            mask = df_ft['lstd']>df_ft['rstd']
+            xmean_cols = [col for col in df_ft.columns if 'xmean' in col]
+            df_ft.loc[mask, xmean_cols] = -1* df_ft.loc[mask, xmean_cols]
+
+        return df_ft
+        
 # %% data
 with open("Xtrain1.pkl", "rb") as f:
     X = pickle.load(f)
@@ -614,5 +701,152 @@ if 1:
     w = w / w.max()
     
 
+
+# %%
+if 0:
+    X_np = np.array(X['Skeleton_Features'].to_list())
+    Y_train = Y
+    X_train = X_np
+    data = X.copy()
+
+    n_keypoints = 33
+
+    col_names = [f"mu({prefix}_{i})" for i in range(0, n_keypoints) 
+                for prefix in ('x','y')]
+
+    print(col_names)
+
+    col_names += [f"sd({prefix}_{i})" for i in range(0, n_keypoints) 
+                for prefix in ('x','y')]
+
+    df_Xtrain = pd.DataFrame(X_train, columns = col_names)
+
+    def extract_points(interval):
+        col_names = [f"mu({prefix}_{i})" for i in range(interval[0], interval[1]+1) 
+                for prefix in ('x','y')]
+        return col_names
+
+    def plot_points(ax, df_Xtrain, body_part, lconnect, col_names, n_samples, Exercise):
+
+        means = df_Xtrain[col_names].iloc[n_samples]
+
+        labels = np.arange(body_part['interval'][0], body_part['interval'][1] + 1)
+        x_plot = np.array(means[::2])
+        y_plot = -np.array(means[1::2])
+
+        sns.scatterplot(
+            x = x_plot,
+            y = y_plot,
+            ax = ax,
+            color = Exercise,
+        #    hue = labels,
+        #    palette = "tab10",
+            s = 25
+            )
+
+        for connect in lconnect:
+            ax.plot(
+            x_plot[connect['index']], 
+            y_plot[connect['index']], 
+            #linestyle='--', 
+            color=Exercise, 
+            alpha=1,
+            linewidth=0.5)
+
+
+    torso_arms = {'type': "torso + arms", 'interval': [11,24]}
+    torso = {'index':[0,1,13,12,0]}
+    larm = {'index':[1,3,5,7,9,5,11]}
+    rarm = {'index':[0,2,4,6,8,4,10]}
+
+    patient_id = 4
+
+    col_names = extract_points(torso_arms['interval'])
+
+    fig, axes = plt.subplots(4, 5, figsize=(20, 15))
+
+    axes = axes.flatten()
+
+    data['Exercise'] = Y_train
+    Ex = ['green', 'blue', 'red']
+
+    for i in range(len(Ex)):
+
+        patient = np.where((data['Patient_Id'] == patient_id) & (data['Exercise'] == i))[0]
+
+        for j in range(len(patient)):
+            plot_points(axes[j], df_Xtrain, torso_arms, [torso, larm, rarm], col_names, patient[j], Ex[i])
+
+    fig.suptitle("Patient Torso", 
+                x=0.5, y=0.99, fontsize = 20)
+    fig.tight_layout()
+    plt.show()
+# %% pacient visualization
+if 1:
+    patient1_ex0 = df_.query('Patient_Id == 1 & target == 0')
+    torso = [11,12,24,23, 11]
+    left_hand = [11, 13, 15, 17, 19, 15, 21]
+    right_hand = [12, 14, 16, 18, 20, 16, 22]
+    left_leg = [23,25,27,29,31,27]
+    right_leg = [24,26,28,30,32,28]
+    face = [7,3,2,1,0,4,5,6,8]
+    mouth = [9,10]
+    body_parts = [torso, left_hand, right_hand, left_leg, right_leg, face, mouth]
+    body_side_parts = {'l': [23,11,13,15,17,19,21,9,7,1,2,3,0,25,27,29,31], 'r': [24,12,14,16,18,20,22,4,5,6,8,10,26,28,30,32]}
+    
+    #body_parts = [torso, left_hand, right_hand, face, mouth]
+    #body_side_parts = {'l': [23,11,13,15,17,19,21,9,7,1,2,3,0], 'r': [24,12,14,16,18,20,22,4,5,6,8,10]}
+
+    n_patients = 14
+    n_targets = 3
+    #patient_ids = [id for id in range(1,n_patients+1) for _ in range(n_targets)]
+    #targets_class = [0,1] * n_patients
+    patient_ids = [id for _ in range(n_targets) for id in range(1,n_patients+1) ]
+    targets_class = [0] * n_patients + [1] * n_patients + [2] * n_patients
+
+    print(patient_ids)
+    print(targets_class)
+    def plot_patient(ax, j):
+        cmap = plt.get_cmap('tab20').colors
+        patient_id = patient_ids[j]
+        target_class = targets_class[j]
+        ax.set_title(f'Patient {patient_id} - Class {target_class}')
+        X_sf = np.array(X['Skeleton_Features'].to_list())
+        df_sf_ft = FeatureTransform3().fit_transform(X_sf)
+        df_sf_ft['Patient_Id'] = df_['Patient_Id']
+        df_sf_ft['target'] = df_['target']
+        data = df_sf_ft.query(f'Patient_Id == {patient_id} & target == {target_class}')
+        if 0:
+            for key, side_parts in body_side_parts.items():
+                x_cols = [f'xmean{i}' for i in side_parts]
+                y_cols = [f'ymean{i}' for i in side_parts]
+                print(x_cols)
+                if key == 'l':
+                    print(data[x_cols],data['xmean11'])
+                    data.loc[:,x_cols] = data[x_cols].to_numpy() / np.abs(data['xmean11'].to_numpy().reshape(len(data),-1))
+                    data.loc[:,y_cols] = data[y_cols].to_numpy() / np.abs(data['ymean11'].to_numpy().reshape(len(data),-1))
+                else:
+                    data.loc[:,x_cols] = data[x_cols].to_numpy() / np.abs(data['xmean12'].to_numpy().reshape(len(data),-1))
+                    data.loc[:,y_cols] = data[y_cols].to_numpy() / np.abs(data['ymean12'].to_numpy().reshape(len(data),-1))
+        for body_part in body_parts:
+            x_cols = [f'xmean{i}' for i in body_part]
+            y_cols = [f'ymean{i}' for i in body_part]
+            xpoints = data[x_cols].mean(axis=0).to_numpy()
+            ypoints = data[y_cols].mean(axis=0).to_numpy()
+            ax.plot(xpoints, ypoints, marker='o', color=cmap[patient_id])
+
+    fig,axes = min_multiple_plot(len(patient_ids), plot_patient, n_cols=14)
+
+    plt.show()
+# %%
+col_names = [c+str(i) for i in range(33) for c in ['xmean','ymean']] + [c+str(i) for i in range(33) for c in ['xstd','ystd']]
+print(col_names)
+
+# %%
+ft2 = FeatureTransform2()
+X_np = np.array(X['Skeleton_Features'].to_list())
+X_ft2 = ft2.fit_transform(X_np)
+print(X_ft2)
+print(X_ft2.columns)
 
 # %%
