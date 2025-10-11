@@ -13,7 +13,7 @@ n_splits = 3
 sgkf = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=42)
 #%%
 import kerastuner as kt  
-from tensorflow.keras import layers, callbacks
+from keras import layers, callbacks
 from sklearn.metrics import f1_score
 import keras
 import numpy as np
@@ -24,13 +24,8 @@ from sklearn.metrics import classification_report, confusion_matrix
 import tensorflow as tf
 from keras import layers, models, callbacks,regularizers, optimizers
 from sklearn.model_selection import StratifiedGroupKFold
-
-from data_imports import FeatureTransform, FeatureTransform_np
-import kerastuner as kt 
-#from tensorflow_addons.metrics import FBetaScore
-
-# from keras.optimizers import Adam
-
+from tensorflow.keras.models import save_model
+import joblib
 
 
 #%%
@@ -43,11 +38,7 @@ class PreProcessing(BaseEstimator, TransformerMixin):
     """
 
     def __init__(self):
-        """
-        Initialize any hyperparameters here.
-        They will be stored as attributes.
-        Example: param1 = scaling factor, param2 = threshold, etc.
-        """
+        
         self.l_arm_arr = np.array([])
         self.r_arm_arr= np.array([])
         self.l_leg_arr=np.array([])
@@ -62,18 +53,6 @@ class PreProcessing(BaseEstimator, TransformerMixin):
         self.d_r_foot_hand = np.array([])
 
     def fit(self, X, y=None):
-        """
-        Learn any statistics from the data, if needed.
-        For example: compute mean/std for scaling, or label encoder mapping.
-        
-        Parameters:
-        X : array-like, shape (n_samples, n_features)
-        y : array-like, optional, shape (n_samples,)
-        
-        Returns:
-        self : object
-        """
-
 
         return self
     
@@ -89,15 +68,6 @@ class PreProcessing(BaseEstimator, TransformerMixin):
     
 
     def transform(self, X):
-        """
-        Apply the preprocessing to X.
-        
-        Parameters:
-        X : array-like, shape (n_samples, n_features)
-        
-        Returns:
-        X_transformed : array-like, shape (n_samples, n_features_new)
-        """
         X = X.copy()
         for i in range(33):
             X[:, i*2+1] = -X[:, i*2+1]
@@ -392,7 +362,7 @@ def normalize_center_and_scale(X,
 
 #%%
 # -----------------------
-# 4) standardize (fit on train only)
+# 4) standardize
 # -----------------------
 def fit_standardizer(X_train):
     scaler = StandardScaler()
@@ -414,6 +384,7 @@ def build_mlp(input_dim, num_classes, dropout=0.3):
     x = layers.Dense(128, activation='swish')(x)
     x = layers.BatchNormalization()(x)
     x = layers.Dropout(dropout)(x)
+    x = layers.Dense(64, activation='swish')(x)
     x = layers.Dense(64, activation='sigmoid')(x)
     out = layers.Dense(num_classes, activation='softmax')(x)
     model = models.Model(inp, out)
@@ -518,9 +489,7 @@ def train_and_evaluate(X_train_raw, X_test_raw, y_train, y_test,
     f1 = f1_score(y_test, mlp_pred, average='macro')
     print("F1 score MLP:", f1)
 
-    return f1 #,{'mlp_model': mlp, 'rf_model': rf, 'scaler': scaler_orig}
-
-
+    return f1 
 # %%
 n_repeats= 2
 results_list = []
