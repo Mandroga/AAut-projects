@@ -6,11 +6,6 @@
 
 
 #%%
-
-import pickle
-
-from data_imports import FeatureTransform_np
-
 path = "Xtrain1.pkl"
 with open(path, "rb") as f:
     X_df = pickle.load(f)
@@ -18,41 +13,48 @@ with open(path, "rb") as f:
 X = np.stack(X_df["Skeleton_Features"].values)
 Y = np.load("Ytrain1.npy")
 #%%
-X = df["Skeleton_Features"].values   # or df.drop(columns=["label", "patient_id"]) if using tabular features
-y = df["target"].values
+
+X = np.stack(df["Skeleton_Features"].values) # shape (n_samples, n_features)  
+y = np.array(df["target"].values)
 groups = df["Patient_Id"].values
 
 from sklearn.model_selection import StratifiedGroupKFold
 
-sgkf = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
+sgkf = StratifiedGroupKFold(n_splits=4, shuffle=True, random_state=42)
+
 
 for fold, (train_idx, test_idx) in enumerate(sgkf.split(X, y, groups)):
     X_train, X_test = X[train_idx], X[test_idx]
-    y_train, y_test = y[train_idx], y[test_idx]    
+    y_train, y_test = y[train_idx], y[test_idx]
+
     print(f"Fold {fold}:")
-    print("  Train patients:", df.loc[train_idx, "Patient_Id"].unique())
-    print("  Test patients:", df.loc[test_idx, "Patient_Id"].unique())
+    print("  Train patients:", df.iloc[train_idx]["Patient_Id"].unique())
+    print("  Test patients: ", df.iloc[test_idx]["Patient_Id"].unique())
+
 
 
 
 #%%
 n1 = 12
 n2 = 4
-n3= 1
+n3= 14
+
+df['weights'] = w
 
 df_train = df[df["Patient_Id"] != n1]
 df_train = df_train[df_train["Patient_Id"] != n2]
 df_train = df_train[df_train["Patient_Id"] != n3]
 
 X_train = np.array(df_train['Skeleton_Features'].to_list())
+y_train = np.array(df_train['target'])
+w_train = np.array(df_train['weights'])
 
-
-df_test = df[df["Patient_Id"].isin([n1, n2])]
+df_test = df[df["Patient_Id"].isin([n1, n2, n3])]
 
 X_test = np.array(df_test['Skeleton_Features'].to_list())
 
-y_train = df_train['target']
-y_test = df_test['target']
+
+y_test = np.array(df_test['target'])
 
 
 #%% separate test train
@@ -120,7 +122,9 @@ class PreProcessing(BaseEstimator, TransformerMixin):
         Returns:
         X_transformed : array-like, shape (n_samples, n_features_new)
         """
-
+        X = X.copy()
+        for i in range(33):
+            X[:, i*2+1] = -X[:, i*2+1]
         # Distance from shoulder to hand
         l_shoulder_pos = X[:, 11*2:11*2+2]  # shape (n_samples, 2)
         r_shoulder_pos = X[:, 12*2:12*2+2]
@@ -350,23 +354,48 @@ pipe_SVM = Pipeline([
     ])
 
 param_grid_SVM = {
-    'svm__C': [1, 10, 11, 12, 9],
+    'svm__C': [1,3, 8, 9, 10, 11],
     'svm__kernel': ['linear', 'rbf', 'poly'],
     'svm__gamma': ['scale', 'auto', 0.01, 0.1],
-    'svm__degree': [2, 3],
+    'svm__degree': [2, 3, 4, 8],
     'svm__class_weight': [None, 'balanced'],
     'svm__shrinking': [True, False],
-    'svm__tol': [5e-3, 1e-3, 5e-4, 1e-4],
+    'svm__tol': [0.1,5e-2,1e-2],
     'svm__coef0': [0, 0.5, 1],
 }
 
+#%% My data splitting
 grid_SVM = GridSearchCV(pipe_SVM, param_grid_SVM, cv=5, n_jobs=-1, verbose=1, scoring='f1_macro')
-grid_SVM.fit(X_train, y_train)
+
+
+grid_SVM.fit(X_train, y_train, svm__sample_weight=w_train)
 #%%
 print("Best params SVM:", grid_SVM.best_params_)
 print("Best score SVM: ", grid_SVM.best_score_)
 y_pred = grid_SVM.predict(X_test)
-print("n1, n2 =", n1, n2)
+print("n1, n2, n3 =", n1, n2, n3)
 print(classification_report(y_test, y_pred))
+
+# %% Duarte's data splitting
+grid_SVM_cv = GridSearchCV(pipe_SVM, param_grid_SVM, cv=sgkf, n_jobs=-1, verbose=1, scoring='f1_macro')
+grid_SVM_cv.fit(X, y, groups=groups)
+# %%
+print("Best params SVM cv:", grid_SVM_cv.best_params_)
+print("Best score SVM cv: ", grid_SVM_cv.best_score_)
+# %%
+results = pd.DataFrame(grid_SVM_cv.cv_results_)
+
+# Expand the dicts in the 'params' column into separate columns
+params_df = pd.json_normalize(results['params'])
+
+# Optionally strip a prefix like 'svm__' from column names:
+params_df.columns = params_df.columns.str.replace(r'^.*?__', '', regex=True)
+
+# Concatenate back to the results dataframe
+full = pd.concat([results, params_df], axis=1)
+
+# Useful columns to inspect
+cols = ['mean_test_score', 'std_test_score', 'rank_test_score'] + list(params_df.columns)
+print(full[cols].sort_values('rank_test_score').head(10))# %%
 
 # %%

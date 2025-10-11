@@ -75,8 +75,12 @@ y_train, y_test = Y[train_idx], Y[test_idx]
 w_train, w_test = w[train_idx], w[test_idx]
 
 
+<<<<<<< HEAD
 print(X_train.shape, X_test.shape)
 print(np.unique(groups_train))
+=======
+n_iter = 10
+>>>>>>> bd2e1cf7ee5e0c7472706a0e266c5ecd1be6fd38
 
 # %% Grouped CV
 #xgb
