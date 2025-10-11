@@ -564,6 +564,7 @@ class FeatureTransform3(BaseEstimator, TransformerMixin):
 
     def fit(self, X, y=None):
         return self
+    
     def transform(self, X):
         #make df
         col_names = [c+str(i) for i in range(33) for c in ['xmean','ymean']] + [c+str(i) for i in range(33) for c in ['xstd','ystd']]
@@ -595,6 +596,22 @@ class FeatureTransform3(BaseEstimator, TransformerMixin):
                     df_ft.loc[:,x_cols] = df_ft[x_cols].to_numpy() / np.abs((df_ft['xmean12']-df_ft['xmean11']).to_numpy().reshape(len(df_ft),-1))
                     df_ft.loc[:,y_cols] = df_ft[y_cols].to_numpy() / np.abs((df_ft['ymean12']-df_ft['ymean24']).to_numpy().reshape(len(df_ft),-1))
 
+                #normalize skeleton
+        #normalize skeleton2
+        if 1:
+            xnorm =  np.abs((df_ft['xmean11']-df_ft['xmean12']).to_numpy().reshape(len(df_ft),-1))
+            ynorm = 0.5 * (np.abs((df_ft['ymean11']-df_ft['ymean23']).to_numpy().reshape(len(df_ft),-1))+np.abs((df_ft['ymean12']-df_ft['ymean24']).to_numpy().reshape(len(df_ft),-1)))
+            for key, side_indexes in self.keypoint_side.items():
+                x_cols = self._make_cols(side_indexes, components=['xmean','xstd'])
+                y_cols = self._make_cols(side_indexes, components=['ymean','ystd'])
+                if key == 'l':
+                    df_ft.loc[:,x_cols] = df_ft[x_cols].to_numpy() / xnorm
+                    df_ft.loc[:,y_cols] = df_ft[y_cols].to_numpy() / ynorm
+                else:
+                    df_ft.loc[:,x_cols] = df_ft[x_cols].to_numpy() / xnorm
+                    df_ft.loc[:,y_cols] = df_ft[y_cols].to_numpy() / ynorm
+
+
         #side std
         if 1:
             for key, side_indexes in self.keypoint_side.items():
@@ -603,11 +620,19 @@ class FeatureTransform3(BaseEstimator, TransformerMixin):
                 df_ft[key + 'std'] = df_ft[x_cols + y_cols].sum(axis=1)
 
         #only one side
-        if 0:
+        if 1:
             mask = df_ft['lstd']>df_ft['rstd']
             xmean_cols = [col for col in df_ft.columns if 'xmean' in col]
             df_ft.loc[mask, xmean_cols] = -1* df_ft.loc[mask, xmean_cols]
-
+        #hand distance
+        if 1:
+            df_ft['lhand_dist'] = np.sqrt((df_ft['xmean15'] - df_ft['xmean0'])**2 + (df_ft['ymean15'] - df_ft['ymean0'])**2)
+            df_ft['rhand_dist'] = np.sqrt((df_ft['xmean16'] - df_ft['xmean0'])**2 + (df_ft['ymean16'] - df_ft['ymean0'])**2)
+        #hip diff
+        if 1:
+            df_ft['lhip_diff'] = df_ft['xmean25'] - df_ft['xmean23']
+            df_ft['rhip_diff'] = df_ft['xmean26'] - df_ft['xmean24']
+        
         return df_ft
         
 # %% data
@@ -782,7 +807,7 @@ if 0:
     fig.tight_layout()
     plt.show()
 # %% pacient visualization
-if 1:
+if 0:
     patient1_ex0 = df_.query('Patient_Id == 1 & target == 0')
     torso = [11,12,24,23, 11]
     left_hand = [11, 13, 15, 17, 19, 15, 21]
@@ -811,11 +836,17 @@ if 1:
         patient_id = patient_ids[j]
         target_class = targets_class[j]
         ax.set_title(f'Patient {patient_id} - Class {target_class}')
-        X_sf = np.array(X['Skeleton_Features'].to_list())
-        df_sf_ft = FeatureTransform3().fit_transform(X_sf)
-        df_sf_ft['Patient_Id'] = df_['Patient_Id']
-        df_sf_ft['target'] = df_['target']
-        data = df_sf_ft.query(f'Patient_Id == {patient_id} & target == {target_class}')
+        
+        if 1:
+            X_sf = np.array(X['Skeleton_Features'].to_list())
+            
+            df_sf_ft = FeatureTransform3().fit_transform(X_sf)
+            df_sf_ft[['Patient_Id','target']] = df_[['Patient_Id','target']].to_numpy()
+            data = df_sf_ft.query(f'Patient_Id == {patient_id} & target == {target_class}')
+        if 0:
+            data = df_.query(f'Patient_Id == {patient_id} & target == {target_class}')
+            ymean_cols = [col for col in data.columns if 'ymean' in col]
+            data.loc[:, ymean_cols] = -1* data[ymean_cols]
         if 0:
             for key, side_parts in body_side_parts.items():
                 x_cols = [f'xmean{i}' for i in side_parts]
@@ -833,6 +864,13 @@ if 1:
             y_cols = [f'ymean{i}' for i in body_part]
             xpoints = data[x_cols].mean(axis=0).to_numpy()
             ypoints = data[y_cols].mean(axis=0).to_numpy()
+            for std_index in [25,26,15,16]:
+                xstd = data[f'xstd{std_index}'].mean(axis=0)
+                ystd = data[f'ystd{std_index}'].mean(axis=0)
+                xmean = data[f'xmean{std_index}'].mean(axis=0)
+                ymean = data[f'ymean{std_index}'].mean(axis=0)
+                ell = Ellipse(xy=(xmean, ymean), width=2*xstd, height=2*ystd,fill=False, linewidth=2)
+                ax.add_patch(ell)
             ax.plot(xpoints, ypoints, marker='o', color=cmap[patient_id])
 
     fig,axes = min_multiple_plot(len(patient_ids), plot_patient, n_cols=14)
