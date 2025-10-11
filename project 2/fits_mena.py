@@ -28,45 +28,26 @@ Neural classifiers
 
 
 # %% training data df
-#remove_feat_cols = ['Patient_Id', 'target','impairment_side']
-remove_feat_cols = ['Patient_Id', 'target']
-feat_cols = [col for col in df_.columns if col not in remove_feat_cols]
 
-X_ = df_[feat_cols].to_numpy()
-y_ = df_['target'].to_numpy()
-#w = np.array([1]*len(y_))
+df['weights'] = w
+n1 = 12
+n2 = 4
+n3= 1
 
-groups_all = df_processed['Patient_Id']
+df_train = df[df["Patient_Id"] != n1]
+df_train = df_train[df_train["Patient_Id"] != n2]
+df_train = df_train[df_train["Patient_Id"] != n3]
 
-sgkf = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
+X_train = np.array(df_train['Skeleton_Features'].to_list())
+y_train = df_train['target']
+w_train = df_train['weights']
 
-gss = GroupShuffleSplit(test_size=0.25, n_splits=1, random_state=42)
+df_test = df[df["Patient_Id"].isin([n1, n2])]
 
-train_idx, test_idx = next(gss.split(X_, y_, groups=groups_all))
-
-X_train, X_test= X_[train_idx], X_[test_idx]
-y_train, y_test = y_[train_idx], y_[test_idx]
-w_train, w_test = w[train_idx], w[test_idx]
-groups_train = groups_all[train_idx]
-
-n_iter = 10
-
-# %% Training data numpy
+X_test = np.array(df_test['Skeleton_Features'].to_list())
 
 
-groups_all = X['Patient_Id']
-X_ = np.array(X['Skeleton_Features'].to_list())
-print(X_.shape)
-sgkf = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
-
-gss = GroupShuffleSplit(test_size=0.25, n_splits=1, random_state=42)
-
-train_idx, test_idx = next(gss.split(X_, Y, groups=groups_all))
-
-X_train, X_test= X_[train_idx], X_[test_idx]
-y_train, y_test = Y[train_idx], Y[test_idx]
-w_train, w_test = w[train_idx], w[test_idx]
-groups_train = groups_all[train_idx]
+y_test = df_test['target']
 
 
 n_iter = 10
@@ -101,7 +82,7 @@ opt = BayesSearchCV(
     estimator=model,
     search_spaces=search_spaces,
     n_iter=n_iter,                 # bump to 60–100 if you can
-    cv=sgkf,
+    cv=5,
     scoring=scorer,
     n_jobs=-1,
     refit=True,
@@ -110,13 +91,15 @@ opt = BayesSearchCV(
 )
 
 # CV fit (pass weights)
-opt.fit(X_train, y_train, clf__sample_weight=w_train, groups=groups_train)
+opt.fit(X_train, y_train, clf__sample_weight=w_train)
 y_pred = opt.predict(X_test)
 
 print("Best params:", opt.best_params_)
 print("Test F1-macro (unweighted):", f1_score(y_test, y_pred, average="macro"))
 print(classification_report(y_test, y_pred, digits=3))
 # %% score
+
+clf.fit(X_train, y_train, sample_weight=w_train)
 y_pred = clf.predict(X_test)
 score = f1_score(y_test, y_pred, average='macro', sample_weight=w_test)
 classification_r = classification_report(y_test, y_pred, sample_weight=w_test)
