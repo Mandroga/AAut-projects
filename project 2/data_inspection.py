@@ -326,4 +326,57 @@ for i in range(len(xmean_cols)):
     sns.scatterplot(data=face_df, x=xmean_cols[i], y=ymean_cols[i], hue='target')
 plt.show()
 
+# %% pacient visualization
+if 1:
+    torso = [11,12,24,23, 11]
+    left_hand = [11, 13, 15, 17, 19, 15, 21]
+    right_hand = [12, 14, 16, 18, 20, 16, 22]
+    left_leg = [23,25,27,29,31,27]
+    right_leg = [24,26,28,30,32,28]
+    face = [7,3,2,1,0,4,5,6,8]
+    mouth = [9,10]
+    body_parts = [torso, left_hand, right_hand, left_leg, right_leg, face, mouth]
+    body_side_parts = {'l': [23,11,13,15,17,19,21,9,7,1,2,3,0,25,27,29,31], 'r': [24,12,14,16,18,20,22,4,5,6,8,10,26,28,30,32]}
+    
+    #patients = [i for i in range(1,15)]
+    patients = [3,6,1]
+    #patients = [11,13,14]
+    targets = [0,1]
+    patient_ids = [id for _ in range(len(targets)) for id in patients ]
+    targets_class = [t for t in targets for _ in range(len(patients))]
+    def plot_patient(ax, j):
+        cmap = plt.get_cmap('tab20').colors
+        patient_id = patient_ids[j]
+        target_class = targets_class[j]
+        ax.set_title(f'Patient {patient_id} - Class {target_class}')
+        
+        if 1:
+            X_sf = np.array(X['Skeleton_Features'].to_list())
+            
+            df_sf_ft = FeatureTransform3().fit_transform(X_sf)
+            df_sf_ft[['Patient_Id','target']] = df_[['Patient_Id','target']].to_numpy()
+            data = df_sf_ft.query(f'Patient_Id == {patient_id} & target == {target_class}')
+ 
+        for body_part in body_parts:
+            x_cols = [f'xmean{i}' for i in body_part]
+            y_cols = [f'ymean{i}' for i in body_part]
+            xpoints = data[x_cols].mean(axis=0).to_numpy()
+            ypoints = data[y_cols].mean(axis=0).to_numpy()
+            for std_index in [25,26,15,16]:
+                xstd = data[f'xstd{std_index}'].mean(axis=0)
+                ystd = data[f'ystd{std_index}'].mean(axis=0)
+                xmean = data[f'xmean{std_index}'].mean(axis=0)
+                ymean = data[f'ymean{std_index}'].mean(axis=0)
+                ell = Ellipse(xy=(xmean, ymean), width=2*xstd, height=2*ystd,fill=False, linewidth=2)
+                ax.add_patch(ell)
+            ax.plot(xpoints, ypoints, marker='o', color=cmap[patient_id])
+
+    if len(patients)>1:
+        fig, axes = min_multiple_plot(len(patient_ids), plot_patient, n_cols=len(patients), n_rows=len(targets))
+    else: fig,axes = min_multiple_plot(len(patient_ids), plot_patient)
+
+    plt.show()
+
+
+
 # %%
