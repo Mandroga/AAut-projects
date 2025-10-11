@@ -12,7 +12,7 @@ groups = df['Patient_Id'].values             # patient IDs
 n_splits = 3
 sgkf = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=42)
 #%%
-import kerastuner as kt  # if using keras-tuner package name; new versions use 'kt' import
+import kerastuner as kt  
 from tensorflow.keras import layers, callbacks
 from sklearn.metrics import f1_score
 import keras
@@ -26,10 +26,11 @@ from keras import layers, models, callbacks,regularizers, optimizers
 from sklearn.model_selection import StratifiedGroupKFold
 
 from data_imports import FeatureTransform, FeatureTransform_np
-
+import kerastuner as kt 
 #from tensorflow_addons.metrics import FBetaScore
 
 # from keras.optimizers import Adam
+
 
 
 #%%
@@ -407,13 +408,13 @@ def apply_standardizer(X, scaler):
 # -----------------------
 def build_mlp(input_dim, num_classes, dropout=0.3):
     inp = layers.Input(shape=(input_dim,))
-    x = layers.Dense(256, activation='relu')(inp)
+    x = layers.Dense(256, activation='sigmoid')(inp)
     x = layers.BatchNormalization()(x)
     x = layers.Dropout(dropout)(x)
-    x = layers.Dense(128, activation='relu')(x)
+    x = layers.Dense(128, activation='swish')(x)
     x = layers.BatchNormalization()(x)
     x = layers.Dropout(dropout)(x)
-    x = layers.Dense(64, activation='relu')(x)
+    x = layers.Dense(64, activation='sigmoid')(x)
     out = layers.Dense(num_classes, activation='softmax')(x)
     model = models.Model(inp, out)
     model = models.Model(inp, out)
@@ -517,29 +518,34 @@ def train_and_evaluate(X_train_raw, X_test_raw, y_train, y_test,
     f1 = f1_score(y_test, mlp_pred, average='macro')
     print("F1 score MLP:", f1)
 
-    return f1, # {'mlp_model': mlp, 'rf_model': rf, 'scaler': scaler_orig}
+    return f1 #,{'mlp_model': mlp, 'rf_model': rf, 'scaler': scaler_orig}
 
 
 # %%
 n_repeats= 2
 results_list = []
-for repeat in range(n_repeats):
-    sgkf = StratifiedGroupKFold(n_splits=3, shuffle=True, random_state=42+repeat)
-    for fold, (train_idx, val_idx) in enumerate(sgkf.split(X, y, groups)):
-        X_train_raw, X_val_raw = X[train_idx], X[val_idx]
-        y_train, y_val = y[train_idx], y[val_idx]
-        w_train = np.array(df['weights'].values[train_idx])
-        w_val   = np.array(df['weights'].values[val_idx])
+val_patients_all = []
+sgkf = StratifiedGroupKFold(n_splits=14, shuffle=True, random_state=42)
+for fold, (train_idx, val_idx) in enumerate(sgkf.split(X, y, groups)):
+    X_train_raw, X_val_raw = X[train_idx], X[val_idx]
+    y_train, y_val = y[train_idx], y[val_idx]
+    w_train = np.array(df['weights'].values[train_idx])
+    w_val   = np.array(df['weights'].values[val_idx])
+    
+    train_patients = groups[train_idx]
+    val_patients = groups[val_idx]
+    print("Fold {fold}")
+    print("Train patient IDs:", np.unique(train_patients))
+    print("Validation patient IDs:", np.unique(val_patients))
 
-        results = train_and_evaluate(X_train_raw, X_val_raw, y_train, y_val,
-                                     w_train=w_train, w_test=w_val,
-                                     epochs=50, batch_size=16)
-        results_list.append(results)
+    results = train_and_evaluate(X_train_raw, X_val_raw, y_train, y_val,
+                                    #w_train=w_train,
+                                    epochs=50, batch_size=16)
+    results_list.append(results)
+    val_patients_all += list(np.unique(val_patients)),
 print("Average F1 over folds:", np.mean(results_list, axis=0))
-print(max(results_list))
-# %%
-print(max(results_list))
-
+print("Max F1 over folds", max(results_list))
+print("Validation patient IDs over all folds:", val_patients_all)
 # %%
 """
             normalized_l_arm,
@@ -549,3 +555,4 @@ print(max(results_list))
             normalized_l_hand_std,
             normalized_r_hand_std,
 """
+# %%
