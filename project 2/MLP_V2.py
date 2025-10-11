@@ -1,6 +1,4 @@
-
 #%%
-
 
 
 %run data_imports.py
@@ -21,7 +19,7 @@ Y = np.load("Ytrain1.npy")
 n1 = 12
 n2 = 4
 
-df_train = df[df["Patient_Id"] != n1]
+df_train = df2[df2["Patient_Id"] != n1]
 df_train = df_train[df_train["Patient_Id"] != n2]
 
 X_train = np.array(df_train['Skeleton_Features'].to_list())
@@ -79,6 +77,16 @@ class PreProcessing(BaseEstimator, TransformerMixin):
 
         return self
     
+    @staticmethod
+    def update_skeleton_features(feat_arr):
+        feat_arr = list(feat_arr)
+
+        featkeep = [15,16,17,18,19,20,21,22,27,28]
+        feat_arr = [feat_arr[i*2] for i in featkeep]+[feat_arr[i*2+1]for i in featkeep]+[feat_arr[i*4] for i in featkeep]+[feat_arr[i*4+1]for i in featkeep]
+
+
+        return feat_arr
+    
 
     def transform(self, X):
         """
@@ -94,11 +102,58 @@ class PreProcessing(BaseEstimator, TransformerMixin):
         # Distance from shoulder to hand
         l_shoulder_pos = X[:, 11*2:11*2+2]  # shape (n_samples, 2)
         r_shoulder_pos = X[:, 12*2:12*2+2]
-        l_finger_pos = X[:, 19*2:19*2+2]
-        r_finger_pos = X[:, 20*2:20*2+2]
+        l_hand_pos = X[:, 19*2:19*2+2]
+        r_hand_pos = X[:, 20*2:20*2+2]
 
-        self.l_arm_arr = np.linalg.norm(l_finger_pos - l_shoulder_pos, axis=1)
-        self.r_arm_arr = np.linalg.norm(r_finger_pos - r_shoulder_pos, axis=1)
+        self.l_arm_arr = np.linalg.norm(l_hand_pos - l_shoulder_pos, axis=1)
+        self.r_arm_arr = np.linalg.norm(r_hand_pos - r_shoulder_pos, axis=1)
+
+        # Height
+        l_eye_pos = X[:, 3*2:3*2+2]
+        r_eye_pos = X[:, 6*2:6*2+2]
+        l_foot_pos = X[:, 29*2:29*2+2]
+        r_foot_pos = X[:, 30*2:30*2+2]
+
+        l_height = np.linalg.norm(l_eye_pos - l_foot_pos, axis=1)
+        r_height = np.linalg.norm(r_eye_pos - r_foot_pos, axis=1)
+        self.heights_d = np.maximum(l_height, r_height)
+
+        l_height_y = l_eye_pos[:,1] - l_foot_pos[:,1]
+        r_height_y = r_eye_pos[:,1] - r_foot_pos[:,1]
+        self.heights = np.maximum(l_height_y, r_height_y)
+
+        # Width (hip distance)
+        l_hip_pos = X[:, 23*2:23*2+2]
+        r_hip_pos = X[:, 24*2:24*2+2]
+        self.widths_d = np.linalg.norm(l_hip_pos - r_hip_pos, axis=1)
+
+        l_hip_x_pos = X[:, 23*2]
+        r_hip_x_pos = X[:, 24*2]
+        self.widths = l_hip_x_pos-r_hip_x_pos
+
+        # Distance from foot to hip
+        self.l_leg_arr = np.linalg.norm(l_hip_pos - l_foot_pos, axis=1)
+        self.r_leg_arr = np.linalg.norm(r_hip_pos - r_foot_pos, axis=1)
+
+        # Hand - nose difference in y
+        self.l_hny = X[:,0*2+1] - X[:,19*2+1]
+        self.r_hny = X[:,0*2+1] - X[:,20*2+1]
+        
+
+        normalized_r_arm = self.r_arm_arr / self.heights
+        normalized_l_arm = self.l_arm_arr / self.heights
+
+        normalized_r_leg=self.r_leg_arr /self.heights
+        normalized_l_leg=self.l_leg_arr / self.heights
+
+        normalized_r_hand_std = X[:,20*4+1]/self.widths
+        normalized_l_hand_std = X[:,19*4+1]/self.widths
+
+        #Elbow and knee stdv
+        featkeep = [13,14,25,26]
+        elbow_knee_sd = [X[:,i*4] / self.widths for i in featkeep]+[X[:,i*4+1] /self.heights for i in featkeep]
+
+        elbow_knee_sd = np.array(elbow_knee_sd).T
 
         # Height
         l_eye_pos = X[:, 3*2:3*2+2]
@@ -123,26 +178,6 @@ class PreProcessing(BaseEstimator, TransformerMixin):
         r_hip_x_pos = X[:, 24*2]
         self.widths = l_hip_x_pos-r_hip_x_pos
 
-        # Distance from toe to hip
-        self.l_leg_arr = np.linalg.norm(l_hip_pos - l_toe_pos, axis=1)
-        self.r_leg_arr = np.linalg.norm(r_hip_pos - r_toe_pos, axis=1)
-
-        # finger - nose difference in y
-        self.l_hny = (X[:,0*2+1] - X[:,19*2+1]) / self.heights
-        self.r_hny = (X[:,0*2+1] - X[:,20*2+1]) /self.heights
-        
-
-        normalized_r_arm = self.r_arm_arr / self.heights
-        normalized_l_arm = self.l_arm_arr / self.heights
-
-        normalized_r_leg=self.r_leg_arr /self.heights
-        normalized_l_leg=self.l_leg_arr / self.heights
-
-        normalized_r_finger_std = X[:,20*4+1]/self.widths
-        normalized_l_finger_std = X[:,19*4+1]/self.widths
-
-        #Feet and hand average
-
         r_hand = [16,18,20,22]
         l_hand=[15,17,19,21]
 
@@ -162,19 +197,6 @@ class PreProcessing(BaseEstimator, TransformerMixin):
         l_hand_x_sd = X[:, [i*4 for i in l_hand]].mean(axis=1) / self.widths
         l_hand_y_sd = X[:, [i*4 + 1 for i in l_hand]].mean(axis=1) / self.heights
 
-        
-        # Normalized feet and hand pos
-        r_foot_x_normalized = X[:, [i*2 for i in r_foot]].mean(axis=1) / self.widths
-        r_foot_y_normalized = X[:, [i*2 + 1 for i in r_foot]].mean(axis=1) / self.heights
-
-        l_foot_x_normalized = X[:, [i*2 for i in l_foot]].mean(axis=1) / self.widths
-        l_foot_y_normalized = X[:, [i*2 + 1 for i in l_foot]].mean(axis=1) / self.heights
-
-        r_hand_x_normalized = X[:, [i*2 for i in r_hand]].mean(axis=1) / self.widths
-        r_hand_y_normalized = X[:, [i*2 + 1 for i in r_hand]].mean(axis=1) / self.heights
-
-        l_hand_x_normalized = X[:, [i*2 for i in l_hand]].mean(axis=1) / self.widths
-        l_hand_y_normalized = X[:, [i*2 + 1 for i in l_hand]].mean(axis=1) / self.heights
 
         # Foot and hand average pos
         
@@ -190,7 +212,7 @@ class PreProcessing(BaseEstimator, TransformerMixin):
         l_hand_x = X[:, [i*2 for i in l_hand]].mean(axis=1) 
         l_hand_y = X[:, [i*2 + 1 for i in l_hand]].mean(axis=1)
 
-        # Distance hadn feet
+        # Distance hand feet
         r_foot_pos = np.column_stack((r_foot_x, r_foot_y))
         l_foot_pos = np.column_stack((l_foot_x, l_foot_y))
         r_hand_pos = np.column_stack((r_hand_x, r_hand_y))
@@ -198,6 +220,10 @@ class PreProcessing(BaseEstimator, TransformerMixin):
 
         self.d_r_foot_hand = np.linalg.norm(r_foot_pos-r_hand_pos, axis=1)
         self.d_l_foot_hand = np.linalg.norm(l_foot_pos-l_hand_pos, axis=1)
+        
+        normalized_d_r_foot_hand = self.d_r_foot_hand /self.heights
+        normalized_d_l_foot_hand = self.d_l_foot_hand / self.heights
+
 
         #x and y difference hand feet
         r_foot_hand_x = (r_foot_x-r_hand_x) /self.widths
@@ -205,50 +231,45 @@ class PreProcessing(BaseEstimator, TransformerMixin):
         l_foot_hand_x = (l_foot_x-l_hand_x) /self.widths
         l_foot_hand_y = (l_foot_y-l_hand_y) / self.heights
         
-        normalized_d_r_foot_hand = self.d_r_foot_hand /self.heights
-        normalized_d_l_foot_hand = self.d_l_foot_hand / self.heights
-        # Elbow and knee std dev
 
-        featkeep = [13,14,25,26]
-        elbow_knee_sd = [X[:,i*4] / self.widths for i in featkeep]+[X[:,i*4+1] /self.heights for i in featkeep]
+        # Normalized feet and hand pos
+        r_foot_x_normalized = X[:, [i*2 for i in r_foot]].mean(axis=1) / self.widths
+        r_foot_y_normalized = X[:, [i*2 + 1 for i in r_foot]].mean(axis=1) / self.heights
 
-        elbow_knee_sd = np.array(elbow_knee_sd).T
-        print(elbow_knee_sd.shape)
+        l_foot_x_normalized = X[:, [i*2 for i in l_foot]].mean(axis=1) / self.widths
+        l_foot_y_normalized = X[:, [i*2 + 1 for i in l_foot]].mean(axis=1) / self.heights
 
+        r_hand_x_normalized = X[:, [i*2 for i in r_hand]].mean(axis=1) / self.widths
+        r_hand_y_normalized = X[:, [i*2 + 1 for i in r_hand]].mean(axis=1) / self.heights
 
+        l_hand_x_normalized = X[:, [i*2 for i in l_hand]].mean(axis=1) / self.widths
+        l_hand_y_normalized = X[:, [i*2 + 1 for i in l_hand]].mean(axis=1) / self.heights
+        
         # Update skeleton features row-wise
-        #X_transformed_list = [self.update_skeleton_features(row) for row in X]
+        X_transformed_list = [self.update_skeleton_features(row) for row in X]
 
         # Convert to 2D NumPy array
-        #X_transformed_array = np.array(X_transformed_list)
+        X_transformed_array = np.array(X_transformed_list)
 
         # Stack extra normalized features
-        X_transformed = np.column_stack([
+        extra_features = np.column_stack([
             normalized_l_arm,
             normalized_r_arm,
             normalized_l_leg,
             normalized_r_leg,
-            normalized_l_finger_std,
-            normalized_r_finger_std,
+            normalized_l_hand_std,
+            normalized_r_hand_std,
             self.l_hny,
             self.r_hny,
-            elbow_knee_sd,
-            
-            #r_foot_x_sd,
-            #r_foot_y_sd,
-            #l_foot_x_sd,
-            #l_foot_y_sd,
-            #r_hand_x_sd,
-            #r_hand_y_sd,
-            #l_hand_x_sd,
-            #l_hand_y_sd,
-            
-            self.heights,
-            self.widths,
-            
-            #normalized_d_l_foot_hand,
-            #normalized_d_r_foot_hand,
-            
+            elbow_knee_sd,    
+            r_foot_x_sd,
+            r_foot_y_sd,
+            l_foot_x_sd,
+            l_foot_y_sd,
+            r_hand_x_sd,
+            r_hand_y_sd,
+            l_hand_x_sd,
+            l_hand_y_sd,
             r_foot_x_normalized,
             r_foot_y_normalized,
             l_foot_x_normalized,
@@ -256,17 +277,10 @@ class PreProcessing(BaseEstimator, TransformerMixin):
             r_hand_x_normalized,
             r_hand_y_normalized,
             l_hand_x_normalized,
-            l_hand_y_normalized,
-
-
-            r_foot_hand_x,
-            r_foot_hand_y,
-            l_foot_hand_x,
-            l_foot_hand_y
-
+            l_hand_y_normalized,   
         ])
         # Combine original features with normalized features
-        #X_transformed = np.hstack([X_transformed_array, extra_features])
+        X_transformed = np.hstack([X_transformed_array, extra_features])
 
         return X_transformed
 
@@ -302,7 +316,6 @@ print("Best score MLP: ", grid.best_score_)
 y_pred = grid.predict(X_test)
 print("n1, n2 =", n1, n2, classification_report(y_test, y_pred))
 # %%
-from numpy import average
 from sklearn.svm import SVC
 
 
