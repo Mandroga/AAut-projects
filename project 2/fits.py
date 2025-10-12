@@ -61,7 +61,7 @@ if 0:
 if 0:
     clf_name = 'mlp'
     clf = MLPClassifier(
-    hidden_layer_sizes=(132,),   # <-- inside your space
+    hidden_layer_sizes=(132,64),   # <-- inside your space
     activation='tanh',
     solver='adam',
     alpha=1e-4,
@@ -80,14 +80,10 @@ if 0:
     'clf__beta_2': Real(0.9, 0.9999),
     'clf__epsilon': Real(1e-9, 1e-7, prior='log-uniform'),
 }
-
 #svm rbf
 if 1:
     clf_name = 'svm_rbf'
 
-    # from skopt.space import Real, Integer, Categorical  # assuming you already import these
-
-    # ----- pipeline -----
     clf = SVC(
         kernel='rbf',
         C=1.0,
@@ -134,8 +130,8 @@ per_fold_reports = {}
 best_params_per_fold = {}
 
 fold_id = 0
-for train_val_idx, test_idx in outer_sgkf.split(X_np, Y, groups=groups_all):
-    print('outer split')
+for iteration, (train_val_idx, test_idx) in enumerate(outer_sgkf.split(X_np, Y, groups=groups_all)):
+    print('outer split', iteration)
     fold_id += 1
     X_trv, X_te = X_np[train_val_idx], X_np[test_idx]
     y_trv, y_te = Y[train_val_idx], Y[test_idx]
@@ -162,7 +158,7 @@ for train_val_idx, test_idx in outer_sgkf.split(X_np, Y, groups=groups_all):
         n_jobs=-1,
         refit=True,
         random_state=42,
-        verbose=2,
+        verbose=0,
     )
 
     # importante: passar groups no fit do inner CV
@@ -180,7 +176,7 @@ for train_val_idx, test_idx in outer_sgkf.split(X_np, Y, groups=groups_all):
     per_fold_reports[f'fold_{fold_id}'] = (classification_report(y_te, y_pred, digits=3), np.unique(groups_trv))
 
     # salvar modelo por fold (opcional)
-    #joblib.dump(best_model, f'{clf_name}_pipeline_fold{fold_id}.joblib')
+    joblib.dump(best_model, f'models\{clf_name}_pipeline_fold{fold_id}.joblib')
 
 # ---- resumo ----
 outer_results = np.array(outer_results)

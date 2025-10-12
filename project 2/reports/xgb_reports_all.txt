@@ -1,0 +1,222 @@
+
+
+
+[Nested SGKF] xgb | F1-macro por fold (teste externo): [0.6961 0.6238 1.     0.9327 0.9833 0.5556 0.8264 0.9162 0.5728 0.9833
+ 0.6542 0.9833 0.6574 0.5911][Nested SGKF] Media +- DP: 0.7840 +- 0.1706
+fold_1 | classification report (outer test):
+              precision    recall  f1-score   support
+
+         0.0      0.833     0.250     0.385        20
+         1.0      0.559     0.950     0.704        20
+         2.0      1.000     1.000     1.000        10
+
+    accuracy                          0.680        50
+   macro avg      0.797     0.733     0.696        50
+weighted avg      0.757     0.680     0.635        50
+
+Groups in training set: [ 2  3  4  5  6  7  8  9 10 11 12 13 14]
+Groups in test set: [1]
+
+fold_2 | classification report (outer test):
+              precision    recall  f1-score   support
+
+         0.0      0.526     1.000     0.690        20
+         1.0      1.000     0.100     0.182        20
+         2.0      1.000     1.000     1.000        10
+
+    accuracy                          0.640        50
+   macro avg      0.842     0.700     0.624        50
+weighted avg      0.811     0.640     0.549        50
+
+Groups in training set: [ 1  3  4  5  6  7  8  9 10 11 12 13 14]
+Groups in test set: [2]
+
+fold_3 | classification report (outer test):
+              precision    recall  f1-score   support
+
+         0.0      1.000     1.000     1.000        20
+         1.0      1.000     1.000     1.000        20
+         2.0      1.000     1.000     1.000        10
+
+    accuracy                          1.000        50
+   macro avg      1.000     1.000     1.000        50
+weighted avg      1.000     1.000     1.000        50
+
+Groups in training set: [ 1  2  4  5  6  7  8  9 10 11 12 13 14]
+Groups in test set: [3]
+
+fold_4 | classification report (outer test):
+              precision    recall  f1-score   support
+
+         0.0      1.000     0.800     0.889        20
+         1.0      0.833     1.000     0.909        20
+         2.0      1.000     1.000     1.000        10
+
+    accuracy                          0.920        50
+   macro avg      0.944     0.933     0.933        50
+weighted avg      0.933     0.920     0.919        50
+
+Groups in training set: [ 1  2  3  5  6  7  8  9 10 11 12 13 14]
+Groups in test set: [4]
+
+fold_5 | classification report (outer test):
+              precision    recall  f1-score   support
+
+         0.0      0.952     1.000     0.976        20
+         1.0      1.000     0.950     0.974        20
+         2.0      1.000     1.000     1.000        10
+
+    accuracy                          0.980        50
+   macro avg      0.984     0.983     0.983        50
+weighted avg      0.981     0.980     0.980        50
+
+Groups in training set: [ 1  2  3  4  6  7  8  9 10 11 12 13 14]
+Groups in test set: [5]
+
+fold_6 | classification report (outer test):
+              precision    recall  f1-score   support
+
+         0.0      0.000     0.000     0.000        20
+         1.0      0.500     1.000     0.667        20
+         2.0      1.000     1.000     1.000        10
+
+    accuracy                          0.600        50
+   macro avg      0.500     0.667     0.556        50
+weighted avg      0.400     0.600     0.467        50
+
+Groups in training set: [ 1  2  3  4  5  7  8  9 10 11 12 13 14]
+Groups in test set: [6]
+
+fold_7 | classification report (outer test):
+              precision    recall  f1-score   support
+
+         0.0      0.917     0.550     0.688        20
+         1.0      0.679     0.950     0.792        20
+         2.0      1.000     1.000     1.000        10
+
+    accuracy                          0.800        50
+   macro avg      0.865     0.833     0.826        50
+weighted avg      0.838     0.800     0.792        50
+
+Groups in training set: [ 1  2  3  4  5  6  8  9 10 11 12 13 14]
+Groups in test set: [7]
+
+fold_8 | classification report (outer test):
+              precision    recall  f1-score   support
+
+         0.0      0.826     0.950     0.884        20
+         1.0      0.941     0.800     0.865        20
+         2.0      1.000     1.000     1.000        10
+
+    accuracy                          0.900        50
+   macro avg      0.922     0.917     0.916        50
+weighted avg      0.907     0.900     0.899        50
+
+Groups in training set: [ 1  2  3  4  5  6  7  8  9 11 12 13 14]
+Groups in test set: [10]
+
+fold_9 | classification report (outer test):
+              precision    recall  f1-score   support
+
+         0.0      0.333     0.050     0.087        20
+         1.0      0.486     0.900     0.632        20
+         2.0      1.000     1.000     1.000        10
+
+    accuracy                          0.580        50
+   macro avg      0.607     0.650     0.573        50
+weighted avg      0.528     0.580     0.487        50
+
+Groups in training set: [ 1  2  3  4  5  6  7  8  9 10 12 13 14]
+Groups in test set: [11]
+
+fold_10 | classification report (outer test):
+              precision    recall  f1-score   support
+
+         0.0      1.000     0.950     0.974        20
+         1.0      0.952     1.000     0.976        20
+         2.0      1.000     1.000     1.000        10
+
+    accuracy                          0.980        50
+   macro avg      0.984     0.983     0.983        50
+weighted avg      0.981     0.980     0.980        50
+
+Groups in training set: [ 1  2  3  4  5  6  7  8  9 10 11 12 14]
+Groups in test set: [13]
+
+fold_11 | classification report (outer test):
+              precision    recall  f1-score   support
+
+         0.0      0.541     1.000     0.702        20
+         1.0      1.000     0.150     0.261        20
+         2.0      1.000     1.000     1.000        10
+
+    accuracy                          0.660        50
+   macro avg      0.847     0.717     0.654        50
+weighted avg      0.816     0.660     0.585        50
+
+Groups in training set: [ 1  2  3  4  5  6  7  8  9 10 11 13 14]
+Groups in test set: [12]
+
+fold_12 | classification report (outer test):
+              precision    recall  f1-score   support
+
+         0.0      1.000     0.950     0.974        20
+         1.0      0.952     1.000     0.976        20
+         2.0      1.000     1.000     1.000        10
+
+    accuracy                          0.980        50
+   macro avg      0.984     0.983     0.983        50
+weighted avg      0.981     0.980     0.980        50
+
+Groups in training set: [ 1  2  3  4  5  6  7  8  9 10 11 12 13]
+Groups in test set: [14]
+
+fold_13 | classification report (outer test):
+              precision    recall  f1-score   support
+
+         0.0      0.556     0.250     0.345        20
+         1.0      0.516     0.800     0.627        20
+         2.0      1.000     1.000     1.000        10
+
+    accuracy                          0.620        50
+   macro avg      0.691     0.683     0.657        50
+weighted avg      0.629     0.620     0.589        50
+
+Groups in training set: [ 1  2  3  4  5  6  7  8 10 11 12 13 14]
+Groups in test set: [9]
+
+fold_14 | classification report (outer test):
+              precision    recall  f1-score   support
+
+         0.0      1.000     0.050     0.095        20
+         1.0      0.513     1.000     0.678        20
+         2.0      1.000     1.000     1.000        10
+
+    accuracy                          0.620        50
+   macro avg      0.838     0.683     0.591        50
+weighted avg      0.805     0.620     0.509        50
+
+Groups in training set: [ 1  2  3  4  5  6  7  9 10 11 12 13 14]
+Groups in test set: [8]
+
+
+Average classification report over folds:
+              precision mean  precision std  recall mean  recall std  \
+name                                                                   
+0                   0.748857       0.300205     0.628571    0.400765   
+1                   0.780786       0.214867     0.828571    0.295027   
+2                   1.000000       0.000000     1.000000    0.000000   
+accuracy                 NaN            NaN          NaN         NaN   
+macro avg           0.843214       0.146342     0.818929    0.135452   
+weighted avg        0.811929       0.175733     0.782857    0.162631   
+
+              f1-score mean  f1-score std  
+name                                       
+0                  0.620643      0.354061  
+1                  0.731643      0.247179  
+2                  1.000000      0.000000  
+accuracy           0.782857      0.162631  
+macro avg          0.783929      0.170498  
+weighted avg       0.740786      0.204703  
+
+Test group scores: [([6], 0.556), ([11], 0.573), ([8], 0.591), ([2], 0.624), ([12], 0.654), ([9], 0.657), ([1], 0.696), ([7], 0.826), ([10], 0.916), ([4], 0.933), ([5], 0.983), ([13], 0.983), ([14], 0.983), ([3], 1.0)]

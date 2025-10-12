@@ -339,7 +339,7 @@ if 1:
     body_side_parts = {'l': [23,11,13,15,17,19,21,9,7,1,2,3,0,25,27,29,31], 'r': [24,12,14,16,18,20,22,4,5,6,8,10,26,28,30,32]}
     
     #patients = [i for i in range(1,15)]
-    patients = [3,6,1]
+    patients = [1,6]
     #patients = [11,13,14]
     targets = [0,1]
     patient_ids = [id for _ in range(len(targets)) for id in patients ]
