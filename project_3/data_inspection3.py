@@ -120,9 +120,10 @@ def ss_animation(ax, X_ss, interval=50):
 
     return ani, (restart_btn, restart)
 
+stroke_dict = {0:'left stroke', 1:'right stroke'}
 # %% visualize skeleton sequence animation
 patients = [1, 2, 3]
-targets = ['E1', 'E2', 'E3']
+targets = ['E4']
 patient_ids = [id for _ in range(len(targets)) for id in patients ]
 targets_class = [t for t in targets for _ in range(len(patients))]
 
@@ -132,15 +133,21 @@ restart_fs = []
 def plot_f(ax, i):
     patient_id = patient_ids[i]
     target_id  = targets_class[i]
-    X_plot = X.query(f'Patient_Id=={patient_id} & Exercise_Id=="{target_id}"').reset_index(drop=True)
-    print(X_plot.loc[0, 'Patient_Id'], X_plot.loc[0, 'Exercise_Id'])
-    X_plot = X_plot.loc[0, 'Skeleton_Sequence']
+    X_plot = X.query(f'Patient_Id=={patient_id} & Exercise_Id=="{target_id}"')
+    X_plot = X_plot.iloc[0]
+    row = X_plot.name
+    
+    ax.text(0.5, -0.6, stroke_dict[Y[patient_id-1]])
 
-    ani, (btn, restart_f) = ss_animation(ax, X_plot, interval=50)
+    ani, (btn, restart_f) = ss_animation(ax, X_plot['Skeleton_Sequence'], interval=50)
     anis.append(ani)
     buttons.append(btn)
     restart_fs.append(restart_f)
     ax.set_title(f'Patient {patient_id}, Exercise {target_id}')
+    lines = ax.get_lines()
+    for i, line in enumerate(lines):
+        color = f"C{patient_id}"  # use Matplotlib’s default color cycle
+        line.set_color(color)
 
 fig ,axes = min_multiple_plot(len(patient_ids), plot_f, n_cols=len(patients))
 #restart all animations button
@@ -157,5 +164,44 @@ if 1:
 plt.show()
 
 
+'''
+Ha videos em que os pacientes começam em diferentes fases do exercicio
+'''
+# %% 
+
+patient_id = 5
+target_id  = 'E3'
+X_plot = X.query(f'Patient_Id=={patient_id} & Exercise_Id=="{target_id}"').iloc[0]
+X_ss = X_plot['Skeleton_Sequence']
+df = skeleton_sequence_to_df(X_ss)
+
+keypoint_index_dict = {19:'l_index',20:'r_index'}
+keypoint_index_color_dict = {19:plt.cm.grey,20:plt.cm.viridis}
+for index in [19,20]:
+    cols = make_cols([index])
+    x_cols = [c for c in cols if 'x' in c]
+    y_cols = [c for c in cols if 'y' in c]
+    # Assume df[x_cols] and df[y_cols] are 1D (or take first col if multiple)
+    x = df[x_cols].values.flatten()
+    y = -df[y_cols].values.flatten()
+
+    # Create a hue that increases with point index
+    t = np.arange(len(x))  # goes from 0 to N-1
+    colors = keypoint_index_color_dict[index](t / t.max())  # normalize and map to a colormap
+    # Scatter plot with color gradient
+    plt.scatter(x, y, c=colors, s=30, label=keypoint_index_dict[index])
+    plt.plot(x, y, color='gray', alpha=0.5)  # optional: connect points with a line
+
+plt.grid(True)
+plt.legend()
+plt.title(f'Patient {patient_id}, {target_id}, {stroke_dict[Y[patient_id-1]]}')
+plt.axis('equal')
+plt.show()
+
+'''
+Patient 1, E4, left stroke - Its very hard to distinguish stroke side - Maybe its important to create a measure of impairment
+'''
+# %%
+print(Y)
 
 # %%
