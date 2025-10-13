@@ -205,7 +205,7 @@ Patient 1, E4, left stroke - Its very hard to distinguish stroke side - Maybe it
 print(Y)
 
 # %%
-patients = [, 5]
+patients = [3, 5]
 targets = ['E3', 'E4']
 patient_ids = [id for _ in range(len(targets)) for id in patients ]
 targets_class = [t for t in targets for _ in range(len(patients))]
