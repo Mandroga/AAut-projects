@@ -11,11 +11,17 @@ print(X.shape, Y.shape)
 print(X.columns)
 print(X.loc[1, 'Skeleton_Sequence'].shape)
 print(Y)
+
+Patient_Exercise_counts = X[['Patient_Id','Exercise_Id']].groupby('Patient_Id')['Exercise_Id'].value_counts().unstack()
+Patient_Exercise_counts['Total'] = Patient_Exercise_counts.sum(axis=1)
+print(Patient_Exercise_counts)
 '''
 X shape (444, 3), Y shape (14,)
 X columns: Patient_Id (int), Exercise_Id (object ex: E1), Skeleton_Sequence (array, ex: (172,66))
 66 features for x and y coords? different number of frames (rows)
 Y is just 0's and 1's
+
+Patients did a different number of exercises each and total.
 '''
 # %% keypoints
 all_keypoints = {'r':[4,5,6,8,10,12,14,16,18,20,22,24,26,28,30,32],
@@ -25,7 +31,6 @@ leg_keypoints = {'l':[23,25,27,29,31], 'r':[24,26,28,30,32]}
 torso_keypoints = {'l':[11,23], 'r':[12,24]}
 face_keypoints = {'l':[7,3,2,1,0], 'r':[4,5,6,8]}
 # %% functions
-
 def make_cols(indexes, components=['x','y']):
     col_names = [c+str(i) for i in indexes for c in components]
     return col_names
@@ -113,7 +118,7 @@ def ss_animation(ax, X_ss, interval=50):
 
     restart_btn.on_clicked(restart)
 
-    return ani, restart_btn
+    return ani, (restart_btn, restart)
 
 # %% visualize skeleton sequence animation
 patients = [1, 2, 3]
@@ -123,6 +128,7 @@ targets_class = [t for t in targets for _ in range(len(patients))]
 
 anis = []
 buttons = []
+restart_fs = []
 def plot_f(ax, i):
     patient_id = patient_ids[i]
     target_id  = targets_class[i]
@@ -130,22 +136,26 @@ def plot_f(ax, i):
     print(X_plot.loc[0, 'Patient_Id'], X_plot.loc[0, 'Exercise_Id'])
     X_plot = X_plot.loc[0, 'Skeleton_Sequence']
 
-    ani, btn = ss_animation(ax, X_plot, interval=50)
+    ani, (btn, restart_f) = ss_animation(ax, X_plot, interval=50)
     anis.append(ani)
     buttons.append(btn)
+    restart_fs.append(restart_f)
     ax.set_title(f'Patient {patient_id}, Exercise {target_id}')
 
 fig ,axes = min_multiple_plot(len(patient_ids), plot_f, n_cols=len(patients))
-plt.tight_layout
+#restart all animations button
+if 1:
+    btn_ax = fig.add_axes([0.02, 0.02, 0.02, 0.03])
+    restart_btn = Button(btn_ax, '⟳ all', color='0.9', hovercolor='0.95')
+    restart_btn.label.set_fontsize(8)
+
+    def on_master(event):
+        for rf in restart_fs:
+            rf(event)
+    restart_btn.on_clicked(on_master)
+#plt.tight_layout()
 plt.show()
 
-
-
-# %% visualize skeleton sequence animation aggregate per patient and exercise
-exercise = 'E1'
-patient_id = 1
-X_agg = X.query(f'Patient_Id=={patient_id} & Exercise_Id=="{exercise}"')['Skeleton_Sequence']
-print([x_i.shape for x_i in X_agg])
 
 
 # %%
