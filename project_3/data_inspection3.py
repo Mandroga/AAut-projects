@@ -205,3 +205,44 @@ Patient 1, E4, left stroke - Its very hard to distinguish stroke side - Maybe it
 print(Y)
 
 # %%
+patients = [, 5]
+targets = ['E3', 'E4']
+patient_ids = [id for _ in range(len(targets)) for id in patients ]
+targets_class = [t for t in targets for _ in range(len(patients))]
+
+def plot_f(ax, i):
+    patient_id = patient_ids[i]
+    target_id  = targets_class[i]
+    X_plot = X.query(f'Patient_Id=={patient_id} & Exercise_Id=="{target_id}"')
+    X_plot = X_plot.iloc[0]
+    row = X_plot.name
+    
+    
+
+    df = skeleton_sequence_to_df(X_plot['Skeleton_Sequence'])
+    keypoint_index_dict = {19:'l_index',20:'r_index'}
+    keypoint_index_color_dict = {19:plt.cm.grey,20:plt.cm.viridis}
+    for index in [19,20]:
+        cols = make_cols([index])
+        x_cols = [c for c in cols if 'x' in c]
+        y_cols = [c for c in cols if 'y' in c]
+        # Assume df[x_cols] and df[y_cols] are 1D (or take first col if multiple)
+        x = df[x_cols].values.flatten()
+        y = -df[y_cols].values.flatten()
+
+        # Create a hue that increases with point index
+        t = np.arange(len(x))  # goes from 0 to N-1
+        colors = keypoint_index_color_dict[index](t / t.max())  # normalize and map to a colormap
+        # Scatter plot with color gradient
+        ax.scatter(x, y, c=colors, s=30, label=keypoint_index_dict[index])
+        ax.plot(x, y, color='gray', alpha=0.5)  # optional: connect points with a line
+    ax.text(min(x)*1.0, min(y)*1.0, stroke_dict[Y[patient_id-1]])
+    ax.grid(True)
+    ax.legend()
+    ax.set_title(f'Patient {patient_id}, {target_id}, {stroke_dict[Y[patient_id-1]]}')
+    ax.set_aspect('equal')
+
+fig ,axes = min_multiple_plot(len(patient_ids), plot_f, n_cols=len(patients))
+plt.show()
+
+# %%
