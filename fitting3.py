@@ -38,24 +38,37 @@ print(X_pre)
 from catboost import CatBoostClassifier
 from sklearn.metrics import balanced_accuracy_score
 model = CatBoostClassifier(
-    iterations=500,        # número de árvores
+    iterations=100,        # número de árvores
     learning_rate=0.05,    # taxa de aprendizado
-    depth=8,               # profundidade das árvores
+    depth=5,               # profundidade das árvores
     loss_function='Logloss',
     eval_metric='BalancedAccuracy',
     random_seed=42,
     verbose=100            # mostra progresso a cada 100 iterações
 )
 cat_features = ['Patient_Id','Exercise_Id']
+
+
+# %%
+
 # %% training
+from sklearn.model_selection import StratifiedKFold, cross_val_score
+from sklearn.metrics import make_scorer, balanced_accuracy_score
+
+
 scores = []
-sgkf = StratifiedGroupKFold(n_splits=7, shuffle=True, random_state=42)
+sgkf = StratifiedGroupKFold(n_splits=3, shuffle=True, random_state=42)
 X_data = X_pre
 Y_data = Y_
-for iteration, (train_val_idx, test_idx) in enumerate(sgkf.split(X_data, Y_data, groups=Y_data)):
+for iteration, (train_val_idx, test_idx) in enumerate(sgkf.split(X_data, Y_data, groups=groups_all)):
     X_train, X_test = X_data.iloc[train_val_idx], X_data.iloc[test_idx]
     y_train, y_test = Y_data[train_val_idx], Y_data[test_idx]
     groups_train = groups_all[train_val_idx]
+    groups_test = groups_all[test_idx]
+    vals, counts_train = np.unique(y_train, return_counts=True)
+    vals, counts_test = np.unique(y_test, return_counts=True)
+    print(counts_train, counts_test)
+    print(np.unique(groups_train), np.unique(groups_test))
 
     model.fit(X_train, y_train, cat_features=cat_features, eval_set=(X_test, y_test), use_best_model=True)
     y_pred = model.predict(X_test)
@@ -63,4 +76,20 @@ for iteration, (train_val_idx, test_idx) in enumerate(sgkf.split(X_data, Y_data,
     scores.append(score)
     print("Balanced Accuracy:", score)
 print("Mean Balanced Accuracy:", np.mean(scores))
+# %% feat importance
+importances = model.get_feature_importance()
+feature_names = model.feature_names_
+
+feat_imp = pd.Series(importances, index=feature_names).sort_values(ascending=False)
+print(feat_imp.head(10))
+
+feat_imp.head(20).plot(kind='barh', figsize=(8,6))
+
+model.plot_tree()  # visualize trees
+
+plt.gca().invert_yaxis()
+plt.title("Top 20 Feature Importances")
+plt.xlabel("Importance")
+plt.show()
+
 # %%
