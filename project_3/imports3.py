@@ -142,5 +142,23 @@ def score_preds_grid_tts(X, y, score_df, preds, grid, test_size=0.2):
                 score_df.loc[len(score_df)] = [model_name, metric_names[i],set_name, metrics[i](truth, pred)]
     return score_df, preds
 
- 
+
+# project functions
+def make_cols(indexes, components=['x','y']):
+    col_names = [c+str(i) for i in indexes for c in components]
+    return col_names
+def skeleton_sequence_to_df(X_ss):
+    col_names = make_cols(range(33))
+    df = pd.DataFrame(X_ss, columns=col_names)
+    return df
+
+def df_distances(df, indexes):
+    df = df.copy()
+    diffs = df.diff().fillna(0)
+    for i in indexes:
+        x, y = f'x{i}', f'y{i}'
+        dist = np.hypot(diffs[x], diffs[y])  # faster and clearer than sqrt(x^2 + y^2)
+        df[f'dist{i}'] = dist
+
+    return df
 # %%
