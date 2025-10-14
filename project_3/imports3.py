@@ -34,6 +34,15 @@ import pickle
 import random
 from skopt.space import Space
 from sklearn.svm import SVC
+import numpy as np
+from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import f1_score
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from scikeras.wrappers import KerasClassifier
+from keras import layers, models
+from sklearn.utils.class_weight import compute_class_weight
+import optuna
 RANDOM_STATE = 42
 
 
@@ -143,4 +152,10 @@ def score_preds_grid_tts(X, y, score_df, preds, grid, test_size=0.2):
     return score_df, preds
 
  
+# %%
+with open("Xtrain2.pkl", "rb") as f:
+    X = pickle.load(f)
+Y= np.load("Ytrain2.npy")
+# %%
+print(X.head())
 # %%
