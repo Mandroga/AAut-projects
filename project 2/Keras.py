@@ -24,7 +24,7 @@ from sklearn.metrics import classification_report, confusion_matrix
 import tensorflow as tf
 from keras import layers, models, callbacks,regularizers, optimizers
 from sklearn.model_selection import StratifiedGroupKFold
-from tensorflow.keras.models import save_model
+from keras.models import save_model
 import joblib
 
 
@@ -489,6 +489,17 @@ def train_and_evaluate(X_train_raw, X_test_raw, y_train, y_test,
     f1 = f1_score(y_test, mlp_pred, average='macro')
     print("F1 score MLP:", f1)
 
+    joblib.dump(featrans, "feature_transform.pkl")
+
+    mlp.save("mlp_model.h5")
+
+    # 2. Save the fitted scaler
+    joblib.dump(scaler_orig, "scaler_skel.pkl")
+
+    # 3. Save the preprocessing object
+    joblib.dump(preproc, "preproc.pkl")
+
+    print("✅ Model and preprocessing objects saved successfully!")
     return f1 
 # %%
 n_repeats= 2
@@ -503,9 +514,9 @@ for fold, (train_idx, val_idx) in enumerate(sgkf.split(X, y, groups)):
     
     train_patients = groups[train_idx]
     val_patients = groups[val_idx]
-    print("Fold {fold}")
-    print("Train patient IDs:", np.unique(train_patients))
-    print("Validation patient IDs:", np.unique(val_patients))
+    #print("Fold {fold}")
+    #print("Train patient IDs:", np.unique(train_patients))
+    #print("Validation patient IDs:", np.unique(val_patients))
 
     results = train_and_evaluate(X_train_raw, X_val_raw, y_train, y_val,
                                     #w_train=w_train,
@@ -515,13 +526,6 @@ for fold, (train_idx, val_idx) in enumerate(sgkf.split(X, y, groups)):
 print("Average F1 over folds:", np.mean(results_list, axis=0))
 print("Max F1 over folds", max(results_list))
 print("Validation patient IDs over all folds:", val_patients_all)
-# %%
-"""
-            normalized_l_arm,
-            normalized_r_arm,
-            normalized_l_leg,
-            normalized_r_leg,
-            normalized_l_hand_std,
-            normalized_r_hand_std,
-"""
+#%%
+print(results_list)
 # %%
