@@ -1,5 +1,7 @@
 #%%
-%run imports3.py
+from sklearn.base import BaseEstimator, TransformerMixin
+import numpy as np
+import pandas as pd
 #%%
 
 class StringtoOneHotEncoder(BaseEstimator, TransformerMixin):
@@ -80,6 +82,7 @@ class Distances(BaseEstimator, TransformerMixin):
     def transform(self, X_onehot):
         PINKYS, TOES, KNEES = [], [], []
         for row in X_onehot.itertuples():
+            Patient_Id = row['Patient_Id']
             ss= row['Skeleton_Sequence']
             if row['E1'] == 1 or row['E2'] == 1 or row['E3'] == 1 or row['E4'] == 1:    
                 rpinky = ss[:,17*2:17*2+1+1]
