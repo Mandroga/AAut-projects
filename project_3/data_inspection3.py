@@ -134,8 +134,8 @@ def ss_animation(ax, X_ss, interval=50):
 
 stroke_dict = {0:'left stroke', 1:'right stroke'}
 # %% visualize skeleton sequence animation
-patients = [1, 2, 3]
-targets = ['E1','E2']
+patients = [3, 4 ,5]
+targets = ['E1']
 patient_ids = [id for _ in range(len(targets)) for id in patients ]
 targets_class = [t for t in targets for _ in range(len(patients))]
 
@@ -149,13 +149,12 @@ def plot_f(ax, i):
     X_plot = X_plot.iloc[0]
     row = X_plot.name
     
-    ax.text(0.5, -0.6, stroke_dict[Y[patient_id-1]])
 
     ani, (btn, restart_f) = ss_animation(ax, X_plot['Skeleton_Sequence'], interval=50)
     anis.append(ani)
     buttons.append(btn)
     restart_fs.append(restart_f)
-    ax.set_title(f'Patient {patient_id}, Exercise {target_id}')
+    ax.set_title(f'Patient {patient_id}, Exercise {target_id}, {stroke_dict[Y[patient_id-1]]}')
     lines = ax.get_lines()
     for i, line in enumerate(lines):
         color = f"C{patient_id}"  # use Matplotlib’s default color cycle
@@ -177,20 +176,25 @@ plt.show()
 
 
 '''
-Ha videos em que os pacientes começam em diferentes fases do exercicio
+Ha videos em que os pacientes começam em diferentes fases do exercicio e repetem um diferente numero de vezes
+Tentar separar em mais amostras as repeticoes?
 
 Arranjar diferentes metodos para cada tipo de exercicio
 Exercicios em que ha simetria - contar o numero de frames que demora em cada lado
 O numero de frames que o paciente demora a completar o exercicio também é uma medida do quao afetado o paciente esta - mas os pacientes começam
 em diferentes fases do exercicio e fazem um diferente numero de vezes
+
+E2 - Paciente 2 faz movimentos muito mais largos por falta de coordenacao!
+
+paciente 1 E1 - what is he doing?!?!
 '''
 
 
 # %% Time flatten visual of keypoints
 
-row_index = 1
-patients = [1,3, 5,6]
-targets = ['E1', 'E2']
+row_index = 0
+patients = [3,4,5]
+targets = ['E1']
 patient_ids = [id for _ in range(len(targets)) for id in patients ]
 targets_class = [t for t in targets for _ in range(len(patients))]
 
@@ -229,6 +233,8 @@ plt.show()
 
 '''
 Patient 1, E4, left stroke - Its very hard to distinguish stroke side - Maybe its important to create a measure of impairment
+
+
 '''
 
 # %% Patient - stroke side

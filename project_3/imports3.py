@@ -43,6 +43,11 @@ from scikeras.wrappers import KerasClassifier
 from keras import layers, models
 from sklearn.utils.class_weight import compute_class_weight
 import optuna
+from sklearn.model_selection import BaseCrossValidator
+from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import make_scorer, balanced_accuracy_score
+from catboost import CatBoostClassifier
+
 RANDOM_STATE = 42
 
 
@@ -152,7 +157,7 @@ def score_preds_grid_tts(X, y, score_df, preds, grid, test_size=0.2):
     return score_df, preds
 
 
-# project functions
+# %% project functions
 def make_cols(indexes, components=['x','y']):
     col_names = [c+str(i) for i in indexes for c in components]
     return col_names
@@ -170,10 +175,49 @@ def df_distances(df, indexes):
         df[f'dist{i}'] = dist
 
     return df
-# %%
-with open("Xtrain2.pkl", "rb") as f:
-    X = pickle.load(f)
-Y= np.load("Ytrain2.npy")
-# %%
-print(X.head())
+
+class StratifiedGroupKFoldStrict(BaseCrossValidator):
+    def __init__(self, n_splits=3, shuffle=True, random_state=None):
+        if n_splits < 2:
+            raise ValueError("n_splits must be at least 2.")
+        self.n_splits = n_splits
+        self.shuffle = shuffle
+        self.random_state = random_state
+
+    def get_n_splits(self, X=None, y=None, groups=None):
+        return self.n_splits
+
+    def split(self, X, y=None, groups=None):
+        if groups is None:
+            raise ValueError("`groups` must be provided for StratifiedGroupKFoldStrict.")
+        y = np.asarray(y)
+        groups = np.asarray(groups)
+
+        # Map samples -> group ids 0..G-1
+        uniq_groups, inv = np.unique(groups, return_inverse=True)
+
+        # One label per group (majority label inside the group)
+        group_labels = np.empty(len(uniq_groups), dtype=y.dtype)
+        for gi in range(len(uniq_groups)):
+            cls, cnt = np.unique(y[inv == gi], return_counts=True)
+            group_labels[gi] = cls[np.argmax(cnt)]
+
+        # Feasibility: each class must have >= n_splits groups
+        for cls in np.unique(group_labels):
+            if (group_labels == cls).sum() < self.n_splits:
+                raise ValueError(
+                    f"Not enough groups of class {cls} for {self.n_splits} folds."
+                )
+
+        skf = StratifiedKFold(
+            n_splits=self.n_splits,
+            shuffle=self.shuffle,
+            random_state=self.random_state
+        )
+
+        for g_tr, g_te in skf.split(uniq_groups, group_labels):
+            tr_idx = np.where(np.isin(inv, g_tr))[0]
+            te_idx = np.where(np.isin(inv, g_te))[0]
+            yield tr_idx, te_idx
+
 # %%
