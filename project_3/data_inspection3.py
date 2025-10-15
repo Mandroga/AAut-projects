@@ -19,6 +19,10 @@ vals, counts = np.unique(Y, return_counts=True)
 side_df = pd.DataFrame(columns=['left stroke','right stroke'])
 side_df.loc[0] = counts
 print(side_df)
+# %%
+for i in range(14):
+    print(f'Patient {i+1}: {stroke_dict[Y[i]]}')
+
 
 '''
 X shape (444, 3), Y shape (14,)
@@ -236,10 +240,6 @@ Patient 1, E4, left stroke - Its very hard to distinguish stroke side - Maybe it
 
 
 '''
-
-# %% Patient - stroke side
-for i in range(14):
-    print(f'Patient {i+1}: {stroke_dict[Y[i]]}')
 
 # %%
 

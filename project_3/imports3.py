@@ -47,6 +47,8 @@ from sklearn.model_selection import BaseCrossValidator
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import make_scorer, balanced_accuracy_score
 from catboost import CatBoostClassifier
+from sklearn.cross_decomposition import PLSRegression
+from sklearn.linear_model import LogisticRegression
 
 RANDOM_STATE = 42
 
@@ -175,6 +177,11 @@ def df_distances(df, indexes):
         df[f'dist{i}'] = dist
 
     return df
+
+def sliding_average(a, window):
+    # compute rolling mean along axis=0 (frames)
+    cumsum = np.pad(np.cumsum(a, axis=0), ((window,0),(0,0),(0,0)), mode='constant')
+    return (cumsum[window:] - cumsum[:-window]) / window
 
 class StratifiedGroupKFoldStrict(BaseCrossValidator):
     def __init__(self, n_splits=3, shuffle=True, random_state=None):
