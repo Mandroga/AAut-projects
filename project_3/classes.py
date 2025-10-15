@@ -1,5 +1,7 @@
-#%%
-%run imports3.py
+#%%w
+from sklearn.base import BaseEstimator, TransformerMixin
+import numpy as np
+import pandas as pd
 #%%
 
 class StringtoOneHotEncoder(BaseEstimator, TransformerMixin):
@@ -78,16 +80,26 @@ class Distances(BaseEstimator, TransformerMixin):
         return float(np.sum(np.linalg.norm(diffs, axis=1)))  # Euclidean per step
     
     def transform(self, X_onehot):
-        PINKYS, TOES, KNEES = [], [], []
+        X_transformed = []
+        for i in range(len(14)):
+            X_transformed.append([i+1,])
         for row in X_onehot.itertuples():
+            Patient_Id = row['Patient_Id']
             ss= row['Skeleton_Sequence']
-            if row['E1'] == 1 or row['E2'] == 1 or row['E3'] == 1 or row['E4'] == 1:    
+            Patient_arr = X_transformed[Patient_Id-1]
+            e1 = row['E1']
+            e2 = row['E2']      
+            e3 = row['E3']
+            e4 = row['E4']
+            e5 = row['E5']
+            Patient_arr.append([[e1,e2,e3,e4,e5],])
+            if e1 == 1 or e2 == 1 or e3 == 1 or e4 == 1:    
                 rpinky = ss[:,17*2:17*2+1+1]
                 lpinky = ss[:,18*2:18*2+1+1]
                 distrpinky = self.sum_consecutive_distances(rpinky)
                 distlpinky = self.sum_consecutive_distances(lpinky)
-                PINKYS.append([distrpinky, distlpinky])
-            if row['E4'] == 1 or row['E5'] == 1:
+                Patient_arr[1].append([distrpinky, distlpinky])
+            if e4 == 1 or e5 == 1:
                 rtoe = ss[:,31*2:31*2+1+1]
                 ltoe = ss[:,32*2:32*2+1+1]
      
@@ -97,12 +109,5 @@ class Distances(BaseEstimator, TransformerMixin):
                 rknee = ss[:,27*2:27*2+1+1]
                 distlknee = self.sum_consecutive_distances(lknee)
                 distrknee = self.sum_consecutive_distances(rknee)
-        X_transformed = X_onehot.drop(columns='Skeleton_Sequence').reset_index(drop=True)
-        PINKYS = np.array(PINKYS)
-        TOES = np.array(TOES)
-        KNEES = np.array(KNEES)
-        X_transformed['RPINKY_DIST'] = PINKYS[:,0]
-        X_transformed['LPINKY_DIST'] = PINKYS[:,1]
-        X_transformed['RTOE_DIST'] = TOES[:,0]
-        X_transformed['LTOE_DIST'] = TOES[:,1]
+                Patient_arr[1].append([distrtoe, distltoe, distrknee, distlknee])
         return X_transformed
