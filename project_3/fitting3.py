@@ -42,6 +42,7 @@ X_pre = preprocess_data().fit_transform(X)
 groups_all = X['Patient_Id'].to_numpy()
 
 print(X_pre)
+
 # %% classifier
 model = CatBoostClassifier(
     iterations=100,        # número de árvores
