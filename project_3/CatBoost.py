@@ -17,7 +17,8 @@ class preprocess_data(BaseEstimator, TransformerMixin):
     def __init__(self):
         self.all_keypoints = {'r':[4,5,6,8,10,12,14,16,18,20,22,24,26,28,30,32],
             'l':[1,2,3,7,9,11,13,15,17,19,21,23,25,27,29,31]}
-        self.body_parts = {'leg':{'l':[23,25,27,29,31],'r':[24,26,28,30,32]},
+        self.body_parts = {'leg':{'l':[23,25,27],'r':[24,26,28]},
+                           'feet':{'l':[29,31],'r':[30,32]},
                            'hand':{'l':[17,19,21],'r':[18,20,22]},
             'arm':{'l':[11,13,15],'r':[12,14,16]},
             'torso':{'l':[11,23],'r':[12,24]},
@@ -40,17 +41,6 @@ class preprocess_data(BaseEstimator, TransformerMixin):
             #invert y
             if 1:
                 X_ss[:,1::2] = -X_ss[:,1::2]
-            #total distances
-            if 0:
-                X_ss_df = skeleton_sequence_to_df(X_ss)
-                X_ss_df = df_distances(X_ss_df, range(33))
-                for body_part in self.body_parts.keys():
-                    for key in ['l', 'r']:
-                        dist_cols = make_cols(self.body_parts[body_part][key], ['dist'])
-                        total_distances = X_ss_df[dist_cols].sum(axis=1)
-                        X.loc[i,f'{body_part}_{key}_distance_mean'] = total_distances.mean()
-                        X.loc[i,f'{body_part}_{key}_distance_std'] = total_distances.std()
-                        X.loc[i,f'{body_part}_{key}_distance_median'] = total_distances.median()
             #normalize skeleton?
             #total distances np
             if 1:
