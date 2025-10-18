@@ -48,7 +48,7 @@ class StringtoOneHotEncoder(BaseEstimator, TransformerMixin):
                 E5.append(1)
             else:
                 raise ValueError(f"Unexpected Exercise_Id value: {row}")
-        X_transformed['E1'] = np.rray(E1)
+        X_transformed['E1'] = np.array(E1)
         X_transformed['E2'] = np.array(E2)
         X_transformed['E3'] = np.array(E3)
         X_transformed['E4'] = np.array(E4)
@@ -63,6 +63,7 @@ class Distances(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
         return self
     
+    @staticmethod
     def sum_consecutive_distances(points):
         """
         points: array-like of shape (T, D) where D is 1 (e.g. x only) or >1 (e.g. x,y).
@@ -109,5 +110,9 @@ class Distances(BaseEstimator, TransformerMixin):
                 rknee = ss[:,27*2:27*2+1+1]
                 distlknee = self.sum_consecutive_distances(lknee)
                 distrknee = self.sum_consecutive_distances(rknee)
-                Patient_arr[1].append([distrtoe, distltoe, distrknee, distlknee])
+                if len(Patient_arr[1])==1:
+                    Patient_arr[1].append([distrtoe, distltoe, distrknee, distlknee])
+                else:
+                    Patient_arr[1][1].append(distrtoe, distltoe, distrknee, distlknee)
         return X_transformed
+# %%

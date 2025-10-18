@@ -1,18 +1,14 @@
 #%%
 %run imports3.py
-%run fitting3.py
+#%run fitting3.py
 #%%
 from classes import *
 import classes
-import importlib
-importlib.reload(classes)
 #%%
-"""
 # --- Load data ---
 with open("Xtrain2.pkl", "rb") as f:
     X = pickle.load(f)
-y= np.load("Ytrain2.npy")
-"""
+Y= np.load("Ytrain2.npy")
 
 #%%
 # --- Dynamic MLP builder for Optuna ---
@@ -35,12 +31,12 @@ def build_dynamic_mlp(input_dim, num_classes, n_layers=2, n_neurons=[128, 64], a
 # --- Optuna objective ---  architecture + single activation + threshold ---
 def objective(trial):
     # --- Sample MLP architecture ---
-    n_layers = trial.suggest_int("n_layers", 3, 7)
+    n_layers = trial.suggest_int("n_layers", 2, 3)
     n_neurons = []
     dropout = []
     for i in range(n_layers):
-        n_neurons.append(trial.suggest_int(f"n_neurons_l{i}", 32, 512, step=32))
-        dropout.append(trial.suggest_float(f"dropout_l{i}", 0.1, 0.6))
+        n_neurons.append(trial.suggest_int(f"n_neurons_l{i}", 5, 12, step=1))
+        dropout.append(trial.suggest_float(f"dropout_l{i}", 0.5, 0.6))
 
     activation = trial.suggest_categorical("activation", ["swish", "relu", "tanh", "sigmoid"])
 
@@ -50,28 +46,29 @@ def objective(trial):
     threshold = trial.suggest_float("threshold", 0.01, 0.99)
 
     # --- Class weights ---
-    classes = np.unique(Y_)
-    class_weights = compute_class_weight("balanced", classes=classes, y=Y_)
+    classes = np.unique(Y)
+    class_weights = compute_class_weight("balanced", classes=classes, y=Y)
     class_weight_dict = {c: w for c, w in zip(classes, class_weights)}
 
     # --- CV loop ---
     skf = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
     fold_baccs = []
 
-    for train_idx, val_idx in skf.split(X, Y_):
-        X_tr, X_val = X.iloc[train_idx].reset_index(drop=True), X.iloc[val_idx].reset_index(drop=True)
-        y_tr, y_val = Y_[train_idx], Y_[val_idx]
 
-        # --- Preprocessing pipeline for this fold ---
-        preproc_pipe = Pipeline([
-            ("feat", preprocess_data()),
-            ("ohe", StringtoOneHotEncoder())
-        ])
+    # --- Preprocessing pipeline for this fold ---
+    preproc_pipe = Pipeline([
+        #("feat", preprocess_data()),
+        #("ohe", StringtoOneHotEncoder())
+        ("feat", FeatEngMerge3())
+    ])
 
-        # Fit & transform training data
-        X_tr_pp = preproc_pipe.fit_transform(X_tr)
-        # Transform validation data
-        X_val_pp = preproc_pipe.transform(X_val)
+    # Fit & transform data
+    X_pp = preproc_pipe.fit_transform(X)
+    #print(X_pp)
+    skf = StratifiedKFold(n_splits=7, shuffle=True, random_state=42)
+    for train_idx, val_idx in skf.split(X_pp, Y):
+        X_tr_pp, X_val_pp = X_pp[train_idx], X_pp[val_idx]
+        y_tr, y_val = Y[train_idx], Y[val_idx]
 
         # Compute input_dim after preprocessing
         input_dim = X_tr_pp.shape[1]
@@ -92,7 +89,7 @@ def objective(trial):
 
         # --- Full pipeline with scaler + classifier ---
         pipe = Pipeline([
-            ("scaler", StandardScaler()),  # optional, works on numeric features only
+            ("scaler", StandardScaler()),
             ("nn", clf)
         ])
 
