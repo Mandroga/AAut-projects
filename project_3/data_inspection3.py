@@ -197,7 +197,7 @@ paciente 1 E1 - what is he doing?!?!
 # %% Time flatten visual of keypoints
 
 row_index = 0
-patients = [3,4,5]
+patients = [3]
 targets = ['E1']
 patient_ids = [id for _ in range(len(targets)) for id in patients ]
 targets_class = [t for t in targets for _ in range(len(patients))]
@@ -219,6 +219,8 @@ def plot_f(ax, i):
         # Assume df[x_cols] and df[y_cols] are 1D (or take first col if multiple)
         x = df[x_cols].values.flatten()
         y = -df[y_cols].values.flatten()
+
+        
 
         # Create a hue that increases with point index
         t = np.arange(len(x))  # goes from 0 to N-1
