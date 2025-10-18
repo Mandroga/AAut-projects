@@ -22,7 +22,9 @@ print(side_df)
 # %%
 for i in range(14):
     print(f'Patient {i+1}: {stroke_dict[Y[i]]}')
-
+# %%
+for i in range(14):
+    print(f'Patient {i+1}: {Y[i]}')
 
 '''
 X shape (444, 3), Y shape (14,)
