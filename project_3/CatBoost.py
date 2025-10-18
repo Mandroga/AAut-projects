@@ -206,6 +206,7 @@ model = Pipeline([
 
 # %% training no tuning
 
+X_pre = preprocess_data().fit_transform(X)
 scores = []
 X_data = X_pre
 Y_data = Y_
