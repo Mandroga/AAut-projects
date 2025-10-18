@@ -1,5 +1,6 @@
 # %% imports
 from imports3 import *
+
 # %% load data
 with open("Xtrain2.pkl", "rb") as f:
     X = pickle.load(f)
@@ -31,6 +32,94 @@ class preprocess_data(BaseEstimator, TransformerMixin):
                     X.loc[i,f'{body_part}_{key}_distance_mean'] = total_distances.mean()
                     X.loc[i,f'{body_part}_{key}_distance_std'] = total_distances.std()
                     X.loc[i,f'{body_part}_{key}_distance_median'] = total_distances.median()
+        if 1:
+            if exercise_id == "E3":
+                lpinky = X_ss[:,17*2:17*2+1+1]
+                rpinky = X_ss[:,18*2:18*2+1+1]
+                lindex = X_ss[:,19*2:19*2+1+1]
+                rindex = X_ss[:,20*2:20*2+1+1]
+                dis_pink_index_l = np.hypot(lpinky[:,0]-lindex[:,0], lpinky[:,1]-lindex[:,1]).mean()
+                dis_pink_index_r = np.hypot(rpinky[:,0]-rindex[:,0], rpinky[:,1]-rindex[:,1]).mean()
+                X.loc[i,'dis_pink_index_l'] = dis_pink_index_l
+                X.loc[i,'dis_pink_index_r'] = dis_pink_index_r
+
+
+                #X.loc[i,'amplitude_l_index'] = amplitude_l_index
+                #X.loc[i,'amplitude_r_index'] = amplitude_r_index
+            else:
+                X.loc[i,'dis_pink_index_l'] = np.nan
+                X.loc[i,'dis_pink_index_r'] = np.nan
+                X.loc[i,'norm_amplitude_l_index'] = np.nan
+                X.loc[i,'norm_amplitude_r_index'] = np.nan
+                #X.loc[i,'amplitude_l_index'] = np.nan
+                #X.loc[i,'amplitude_r_index'] = np.nan
+            if exercise_id == "E4":
+                lindex = X_ss[:,19*2:19*2+1+1]
+                rindex = X_ss[:,20*2:20*2+1+1]
+                
+                #Amplitudes and distances for index fingers
+                amplitude_l_index = lindex[:,1].max() - lindex[:,1].min()
+                amplitude_r_index = rindex[:,1].max() - rindex[:,1].min()
+
+                distance_l_index = sum_consecutive_distances(lindex)
+                distance_r_index = sum_consecutive_distances(rindex)
+
+                norm_amplitude_l_index =  2 * amplitude_l_index / distance_l_index if distance_l_index !=0 else 0
+                norm_amplitude_r_index = 2 * amplitude_r_index / distance_r_index if distance_r_index !=0 else 0
+                X.loc[i,'norm_amplitude_l_index'] = norm_amplitude_l_index
+                X.loc[i,'norm_amplitude_r_index'] = norm_amplitude_r_index
+                X.loc[i,'amplitude_l_index'] = amplitude_l_index
+                X.loc[i,'amplitude_r_index'] = amplitude_r_index
+
+                #Orientation changes in wrist keypoints
+                lwrist = X_ss[:,17*2:17*2+1+1]
+                rwrist = X_ss[:,16*2:16*2+1+1]
+                orientation_changes_lwrist = orientationchange(lwrist)
+                orientation_changes_rwrist = orientationchange(rwrist)
+                #X.loc[i,'orientation_changes_lwrist'] = orientation_changes_lwrist
+                #X.loc[i,'orientation_changes_rwrist'] = orientation_changes_rwrist
+
+            else:
+                X.loc[i,'norm_amplitude_l_index'] = np.nan
+                X.loc[i,'norm_amplitude_r_index'] = np.nan
+                X.loc[i,'amplitude_l_index'] = np.nan
+                X.loc[i,'amplitude_r_index'] = np.nan
+                #X.loc[i,'orientation_changes_lwrist'] = np.nan
+                #X.loc[i,'orientation_changes_rwrist'] = np.nan
+
+            if 1:
+                if exercise_id == "E5":
+                    lknee = X_ss[:,25*2:25*2+1+1]
+                    rknee = X_ss[:,26*2:26*2+1+1]
+                    orientation_changes_lknee = orientationchange(lknee)
+                    orientation_changes_rknee = orientationchange(rknee)
+                    X.loc[i,'orientation_changes_lknee'] = orientation_changes_lknee
+                    X.loc[i,'orientation_changes_rknee'] = orientation_changes_rknee
+
+                    #Amplitudes and distances for knee keypoints
+                    amplitude_l_knee = lknee[:,1].max() - lknee[:,1].min()
+                    amplitude_r_knee = rknee[:,1].max() - rknee[:,1].min()
+
+                    distance_l_knee = sum_consecutive_distances(lknee)
+                    distance_r_knee = sum_consecutive_distances(rknee)
+
+                    norm_amplitude_l_knee =  2 * amplitude_l_knee / distance_l_knee if distance_l_knee !=0 else 0
+                    norm_amplitude_r_knee = 2 * amplitude_r_knee / distance_r_knee if distance_r_knee !=0 else 0
+
+                    X.loc[i,'norm_amplitude_l_knee'] = norm_amplitude_l_knee
+                    X.loc[i,'norm_amplitude_r_knee'] = norm_amplitude_r_knee
+                    X.loc[i,'amplitude_l_knee'] = amplitude_l_knee
+                    X.loc[i,'amplitude_r_knee'] = amplitude_r_knee
+                else:
+                    X.loc[i,'orientation_changes_lknee'] = np.nan
+                    X.loc[i,'orientation_changes_rknee'] = np.nan
+                    X.loc[i,'norm_amplitude_l_knee'] = np.nan
+                    X.loc[i,'norm_amplitude_r_knee'] = np.nan
+                    X.loc[i,'amplitude_l_knee'] = np.nan
+                    X.loc[i,'amplitude_r_knee'] = np.nan
+            
+        
+        
         #drop ss
         if 1:
             X = X.drop('Skeleton_Sequence', axis=1)

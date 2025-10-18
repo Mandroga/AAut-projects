@@ -85,7 +85,10 @@ class preprocess_data(BaseEstimator, TransformerMixin):
                         for f_n, f in agg_fs:
                             total_jitter_side = f(jitter_sum)
                             X.loc[i,f'jitter_{key}_{f_n}'] = total_jitter_side
-      
+            #mena-features
+            if 1:
+                
+        #drop SS
         if 1:
             X = X.drop('Skeleton_Sequence', axis=1)
         return X
@@ -288,6 +291,30 @@ for iteration, (train_val_idx, test_idx) in enumerate(sgkfs.split(X_data, Y_data
     scores.append(score)
     print("Balanced Accuracy:", score)
 print("Mean Balanced Accuracy:", np.mean(scores), '+-', np.std(scores))
+
+# %% group voting bayes
+
+
+scores = []
+X_data = X
+Y_data = Y_
+
+sgkfs = StratifiedGroupKFoldStrict(n_splits=5, shuffle=True, random_state=42)
+
+opt = BayesSearchCV(
+estimator=model,
+search_spaces=search_space,
+n_iter=5,                                # start with ~40-80; increase if time allows
+scoring=make_scorer(balanced_accuracy_score),
+cv=sgkfs,
+n_jobs=-1,
+refit=True,
+random_state=42,
+verbose=2
+)
+opt.fit(X_data, Y_data, groups=groups_all, cat_features=cat_features)
+
+best_i = opt.best_index_
 # %%
 print(scores)
 print("Mean Balanced Accuracy:", np.mean(scores), '+-', np.std(scores))

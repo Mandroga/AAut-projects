@@ -228,3 +228,47 @@ class StratifiedGroupKFoldStrict(BaseCrossValidator):
             yield tr_idx, te_idx
 
 # %%
+
+def sum_consecutive_distances(points):
+        """
+        points: array-like of shape (T, D) where D is 1 (e.g. x only) or >1 (e.g. x,y).
+        Returns the sum of Euclidean distances between consecutive points:
+            sum_{t=0..T-2} ||points[t+1] - points[t]||.
+        """
+        pts = np.asarray(points, dtype=float)
+        if pts.ndim == 1:
+            pts = pts.reshape(-1, 1)
+        if pts.shape[0] < 2:
+            return 0.0
+        diffs = np.diff(pts, axis=0)            # shape (T-1, D)
+        if pts.shape[1] == 1:
+            return float(np.sum(np.abs(diffs[:, 0])))   # 1D -> absolute diffs
+        return float(np.sum(np.linalg.norm(diffs, axis=1)))  # Euclidean per step
+
+def orientationchange(points):
+        """
+        points: array-like of shape (T, D) where D is 1 (e.g. x only) or >1 (e.g. x,y).
+        Returns the number of times the orientation of the movement vector changes significantly.
+        A significant change is defined as a change in angle greater than 45 degrees.:
+        """
+        pts = np.asarray(points, dtype=float)
+        if pts.ndim == 1:
+            pts = pts.reshape(-1, 1)
+        if pts.shape[0] < 2:
+            return 0.0
+        vectors = np.diff(pts, axis=0)            # shape (T-1, D)
+        orientations = []
+        for vec in vectors:
+            norm = np.linalg.norm(vec)
+            if norm == 0:
+                orientations.append(0)
+            else:
+                unit_vec = vec / norm
+                angle = np.arctan2(unit_vec[1], unit_vec[0])  # angle in radians
+                orientations.append(angle)
+        orientation_changes = 0
+        for i in range(1, len(orientations)):
+            angle_diff = np.abs(orientations[i] - orientations[i-1])
+            if angle_diff > np.pi / 4:  # greater than 45 degrees
+                orientation_changes += 1
+        return orientation_changes
